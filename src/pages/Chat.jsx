@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import client from "../api/client";
 import {
   ArrowLeft,
@@ -48,14 +48,18 @@ const Chat = () => {
   useEffect(() => {
     const initSession = async () => {
       try {
-        const { data } = await client.post("/api/chat/session", {});
+        setLoading(true);
+        // 1. Try URL param, then localStorage, then new session
+        const targetId = id || localStorage.getItem('lastSessionId');
+        
+        const { data } = await client.post("/api/chat/session", { sessionId: targetId });
         setSessionId(data._id);
+        localStorage.setItem('lastSessionId', data._id);
 
-        const msgRes = await client.get(
-          `/api/chat/session/${data._id}/messages`,
-        );
-        if (msgRes.data && msgRes.data.length > 0) {
-          setMessages(msgRes.data);
+        // 2. Load existing messages if this is a resumed session
+        const { data: history } = await client.get(`/api/chat/session/${data._id}/messages`);
+        if (history && history.length > 0) {
+          setMessages(history);
         } else {
           setMessages([
             {

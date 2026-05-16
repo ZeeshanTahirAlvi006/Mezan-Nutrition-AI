@@ -29,6 +29,7 @@ function App() {
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
             <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+            <Route path="/chat/:id" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
             <Route path="/meal-plan" element={<ProtectedRoute><MealPlan /></ProtectedRoute>} />
 
             <Route
