@@ -73,6 +73,8 @@ const Chat = () => {
         }
       } catch (error) {
         console.error("Failed to init session", error);
+      } finally {
+        setLoading(false);
       }
     };
     initSession();
