@@ -28,6 +28,8 @@ const Chat = () => {
   const [agentState, setAgentState] = useState(null);
   const [debugMode, setDebugMode] = useState(false);
 
+  const { id } = useParams();
+  const navigate = useNavigate();
   const messagesEndRef = useRef(null);
 
   const suggestedQuestions = [
