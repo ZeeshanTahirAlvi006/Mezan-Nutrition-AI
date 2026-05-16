@@ -103,7 +103,7 @@ const FoodSearch = ({ onAddFood }) => {
             <input 
               type="text" 
               placeholder="Search food database..." 
-              className="kcal-input pl-12"
+              className="kcal-input !pl-12"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />

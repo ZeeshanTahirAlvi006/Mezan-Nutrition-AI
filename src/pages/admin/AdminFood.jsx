@@ -112,7 +112,7 @@ const AdminFood = () => {
           value={q}
           onChange={(e) => { setQ(e.target.value); setPage(1); }}
           placeholder="Search foods..."
-          className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm"
+          className="w-full !pl-10 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm"
         />
       </div>
 
