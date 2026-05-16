@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// Use VITE_API_URL if provided, otherwise default to Vercel's backend route in production or localhost in development
+const baseURL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/_/backend' : 'http://127.0.0.1:5000');
 
 const client = axios.create({
   baseURL,
