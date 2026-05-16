@@ -4,6 +4,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import connectDB from './config/db.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 import userRoutes from './routes/userRoutes.js';
 import foodRoutes from './routes/foodRoutes.js';
@@ -114,8 +120,18 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.get('/', (req, res) => {
-  res.send('Antigravity Nutrition API is running securely');
+// SERVE FRONTEND STATIC FILES
+const distPath = path.join(__dirname, '../dist');
+app.use(express.static(distPath));
+
+// Handle client-side routing (SPA)
+app.get('*', (req, res) => {
+  // Only serve index.html for non-API routes
+  if (!req.path.startsWith('/api')) {
+    res.sendFile(path.join(distPath, 'index.html'));
+  } else {
+    res.status(404).json({ message: 'API Route Not Found' });
+  }
 });
 
 const PORT = process.env.PORT || 5000;
