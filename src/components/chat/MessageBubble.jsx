@@ -10,6 +10,11 @@ const MessageBubble = ({ message }) => {
   const [feedback, setFeedback] = useState(message.feedback || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Don't render empty assistant messages (tool calls or failed completions)
+  if (!message.content && message.role === "assistant") {
+    return null;
+  }
+
   const handleFeedback = async (type) => {
     if (!message._id || isSubmitting) return;
     

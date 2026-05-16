@@ -110,12 +110,15 @@ const Chat = () => {
         );
 
         console.log("AI Response Received:", aiResponse);
+        
+        // Add message to UI (MessageBubble will hide it if content is empty)
+        setMessages((prev) => [...prev, aiResponse]);
 
         if (aiResponse.toolCalls && aiResponse.toolCalls.length > 0) {
           const toolCall = aiResponse.toolCalls[0];
           const toolArgs = JSON.parse(toolCall.function.arguments);
 
-          // Show Agent Action State (Searching database...)
+          // Show Agent Action State
           setAgentState({
             toolName: toolCall.function.name,
             toolArgs: toolArgs,
@@ -123,7 +126,7 @@ const Chat = () => {
             result: null,
           });
 
-          // Execute Tool via Frontend-Driven Loop
+          // Execute Tool
           const { data: toolData } = await client.post(
             "/api/chat/execute-tool",
             {
@@ -134,16 +137,14 @@ const Chat = () => {
             },
           );
 
-          console.log("Tool execution result:", toolData);
-
-          // Update Action State with result
+          // Update Action State
           setAgentState((prev) => ({
             ...prev,
             isExecuting: false,
             result: toolData.result,
           }));
 
-          // Prepare payload for next loop iteration (sending tool result to Mistral)
+          // Prepare next iteration
           currentPayload = {
             sessionId,
             role: "tool",
@@ -152,13 +153,9 @@ const Chat = () => {
             name: toolCall.function.name,
           };
         } else {
-          // Standard text response
-          // Only show fallback if there is absolutely no content AND no tool calls
-          if (!aiResponse.content && (!aiResponse.toolCalls || aiResponse.toolCalls.length === 0)) {
-            aiResponse.content = "I'm sorry, I couldn't generate a specific response. Is there anything else I can help with?";
-          }
-          setMessages((prev) => [...prev, aiResponse]);
+          // Final text response
           aiDone = true;
+          setAgentState(null); // Clear agent state when done
           setLoading(false);
         }
       }
