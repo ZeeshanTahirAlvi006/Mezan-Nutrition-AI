@@ -125,7 +125,7 @@ const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 
 // Handle client-side routing (SPA)
-app.get('*', (req, res) => {
+app.get('(.*)', (req, res) => {
   // Only serve index.html for non-API routes
   if (!req.path.startsWith('/api')) {
     res.sendFile(path.join(distPath, 'index.html'));
