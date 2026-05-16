@@ -30,9 +30,14 @@ if (process.env.JWT_SECRET.length < 32) {
 
 // CORS Configuration (Must be at the top to handle preflight)
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: [
+    process.env.FRONTEND_URL,
+    'https://mezannutritionai.vercel.app', // Explicitly allow your Vercel domain
+    'http://localhost:5173',
+    'http://127.0.0.1:5173'
+  ].filter(Boolean),
   credentials: true,
-  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
 
