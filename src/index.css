@@ -1,0 +1,170 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* KCAL Sage Theme Variables */
+  --kcal-green: #91C788;
+  --kcal-green-light: #F0F7EE;
+  --kcal-coral: #FF8E8E;
+  --kcal-coral-light: #FFF0F0;
+  --kcal-cream: #F8FAF8;
+  --kcal-white: #FFFFFF;
+  --kcal-text-main: #333333;
+  --kcal-text-muted: #7A7A7A;
+  --radius-xl: 2rem;
+  --radius-lg: 1.5rem;
+}
+
+@theme {
+  --color-kcal-green: var(--kcal-green);
+  --color-kcal-green-light: var(--kcal-green-light);
+  --color-kcal-coral: var(--kcal-coral);
+  --color-kcal-coral-light: var(--kcal-coral-light);
+  --color-kcal-cream: var(--kcal-cream);
+  --color-kcal-white: var(--kcal-white);
+  --color-kcal-text-main: var(--kcal-text-main);
+  --color-kcal-text-muted: var(--kcal-text-muted);
+  --radius-xl: var(--radius-xl);
+  --radius-lg: var(--radius-lg);
+}
+
+/* Base Styles using Standard CSS to avoid IDE warnings */
+body {
+  background-color: var(--kcal-cream);
+  color: var(--kcal-text-main);
+  font-family: 'Outfit', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Component Styles */
+.kcal-card {
+  background-color: var(--kcal-white);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--kcal-green-light);
+  padding: 1.5rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.kcal-btn-primary {
+  background-color: var(--kcal-green);
+  color: white;
+  font-weight: 700;
+  padding: 1rem 2rem;
+  border-radius: var(--radius-lg);
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 15px -3px rgba(145, 199, 136, 0.2);
+  border: none;
+  cursor: pointer;
+}
+
+.kcal-btn-primary:hover {
+  background-color: #7FB677;
+}
+
+.kcal-btn-primary:active {
+  transform: scale(0.95);
+}
+
+.kcal-btn-secondary {
+  background-color: var(--kcal-coral);
+  color: white;
+  font-weight: 700;
+  padding: 1rem 2rem;
+  border-radius: var(--radius-lg);
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 15px -3px rgba(255, 142, 142, 0.2);
+  border: none;
+  cursor: pointer;
+}
+
+.kcal-btn-secondary:hover {
+  background-color: #FF7A7A;
+}
+
+.kcal-btn-secondary:active {
+  transform: scale(0.95);
+}
+
+.kcal-input {
+  width: 100%;
+  background-color: var(--kcal-green-light);
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  color: var(--kcal-text-main);
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.kcal-input:focus {
+  box-shadow: 0 0 0 2px var(--kcal-green);
+}
+
+.kcal-nav-item {
+  padding: 1rem;
+  color: var(--kcal-text-muted);
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.kcal-nav-item:hover, .kcal-nav-item.active {
+  color: var(--kcal-green);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background-color: var(--kcal-cream);
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--kcal-green);
+  border-radius: 9999px;
+}
+
+/* Typography Overrides */
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.02em;
+}
+
+/* Form Elements */
+.kcal-slider {
+  width: 100%;
+  height: 0.5rem;
+  background-color: var(--kcal-green-light);
+  border-radius: 9999px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.kcal-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  background: var(--kcal-green);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.kcal-slider-coral::-webkit-slider-thumb {
+  background: var(--kcal-coral);
+}
+
+/* Legacy Helpers */
+.glass {
+  background-color: var(--kcal-white);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--kcal-green-light);
+}
+
+.glass-panel {
+  background-color: var(--kcal-white);
+  border: 1px solid var(--kcal-green-light);
+}
