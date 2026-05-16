@@ -21,6 +21,7 @@ import AgentActionState from "../components/chat/AgentActionState";
 
 const Chat = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -28,8 +29,6 @@ const Chat = () => {
   const [agentState, setAgentState] = useState(null);
   const [debugMode, setDebugMode] = useState(false);
 
-  const { id } = useParams();
-  const navigate = useNavigate();
   const messagesEndRef = useRef(null);
 
   const suggestedQuestions = [
