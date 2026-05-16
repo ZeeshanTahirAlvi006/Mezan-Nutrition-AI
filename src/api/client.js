@@ -1,8 +1,13 @@
 import axios from 'axios';
 
-// Use VITE_API_URL if provided, otherwise detect environment based on hostname
-const isProduction = import.meta.env.PROD || window.location.hostname.includes('vercel.app');
-const baseURL = import.meta.env.VITE_API_URL || (isProduction ? '/_/backend' : 'http://127.0.0.1:5000');
+// Detect environment
+const isVercel = window.location.hostname.includes('vercel.app');
+const isRender = window.location.hostname.includes('onrender.com');
+const isProduction = import.meta.env.PROD || isVercel || isRender;
+
+// If on Vercel, use the /_/backend proxy. If on Render or local, use standard paths.
+const baseURL = import.meta.env.VITE_API_URL || 
+                (isVercel ? '/_/backend' : (isProduction ? '' : 'http://127.0.0.1:5000'));
 
 const client = axios.create({
   baseURL,
@@ -23,11 +28,12 @@ client.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error.response?.status;
-    const url = error.config?.url || '';
-
-    if ((status === 401 || status === 403) && url.includes('/api/admin')) {
+    
+    // If we get a 401 (Unauthorized), the token is likely invalid/expired
+    if (status === 401) {
       localStorage.removeItem('token');
-      if (window.location.pathname.startsWith('/admin')) {
+      // Only redirect if we're not already on the login page to avoid loops
+      if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }
     }
