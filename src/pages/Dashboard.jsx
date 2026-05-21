@@ -6,34 +6,25 @@ import FoodSearch from "../components/FoodSearch";
 import DailyCheckIn from "../components/DailyCheckIn";
 import BarcodeScanner from "../components/BarcodeScanner";
 import AchievementToast from "../components/AchievementToast";
-import {
-  LogOut,
-  LayoutDashboard,
-  Utensils,
-  MessageSquare,
-  Flame,
-  Search,
-  Heart,
-  User,
-  Plus,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react";
+import TopAppBar from "../components/layout/TopAppBar";
+import BottomNav from "../components/layout/BottomNav";
+import PantryManager from "../components/PantryManager";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
 const Dashboard = () => {
-  const { user, logout } = useContext(AuthContext);
+  const { user, logout, refreshUser } = useContext(AuthContext);
   const navigate = useNavigate();
   const [log, setLog] = useState({
     totals: { calories: 0, protein: 0, carbs: 0, fats: 0 },
     foodItems: [],
   });
   const [showToast, setShowToast] = useState(false);
-  const [showLoggedItems, setShowLoggedItems] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     fetchTodayLog();
+    refreshUser();
   }, []);
 
   const fetchTodayLog = async () => {
@@ -54,6 +45,7 @@ const Dashboard = () => {
       };
       await client.post("/api/logs/daily", payload);
       fetchTodayLog();
+      refreshUser();
       setShowToast(true);
       setTimeout(() => setShowToast(false), 4000);
     } catch (err) {
@@ -66,206 +58,349 @@ const Dashboard = () => {
     navigate("/login");
   };
 
+  // Calculate percentages for progress rings
+  const calorieGoal = user?.targetCalories || 2000;
+  const proteinGoal = user?.proteinGoal || 150;
+  const carbsGoal = user?.carbsGoal || 250;
+  const fatsGoal = user?.fatsGoal || 65;
+
+  const caloriePct = Math.min(100, Math.round((log.totals.calories / calorieGoal) * 100));
+  const proteinPct = Math.min(100, Math.round((log.totals.protein / proteinGoal) * 100));
+  const carbsPct = Math.min(100, Math.round((log.totals.carbs / carbsGoal) * 100));
+  const fatsPct = Math.min(100, Math.round((log.totals.fats / fatsGoal) * 100));
+
+  // Greeting based on time of day
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
+  };
+
   return (
-    <div className="min-h-screen bg-[var(--kcal-cream)] flex flex-col pb-24 lg:pb-0 lg:pl-72">
-      {/* Desktop Sidebar Navigation */}
-      <nav className="hidden lg:flex fixed left-0 top-0 h-full w-72 bg-[var(--kcal-white)] border-r border-[var(--kcal-green-light)] p-10 flex-col shadow-sm z-30">
-        <div className="mb-12">
-          <h1 className="text-3xl font-extrabold text-[var(--kcal-green)] tracking-tighter">
-            kcal
-          </h1>
-        </div>
-
-        <div className="flex-1 space-y-2">
-          <button className="w-full flex items-center space-x-3 bg-[var(--kcal-green-light)] text-[var(--kcal-green)] px-5 py-4 rounded-[var(--radius-lg)] transition-all font-bold">
-            <LayoutDashboard className="w-5 h-5" />
-            <span className="text-sm">Dashboard</span>
-          </button>
-          <button
-            onClick={() => navigate("/meal-plan")}
-            className="w-full flex items-center space-x-3 text-[var(--kcal-text-muted)] hover:text-[var(--kcal-green)] px-5 py-4 rounded-[var(--radius-lg)] transition-all font-bold"
-          >
-            <Utensils className="w-5 h-5" />
-            <span className="text-sm">Meal Plan</span>
-          </button>
-          <button
-            onClick={() => navigate("/chat")}
-            className="w-full flex items-center space-x-3 text-[var(--kcal-text-muted)] hover:text-[var(--kcal-green)] px-5 py-4 rounded-[var(--radius-lg)] transition-all font-bold"
-          >
-            <MessageSquare className="w-5 h-5" />
-            <span className="text-sm">AI Coach</span>
-          </button>
-        </div>
-
-        <button
-          onClick={handleLogout}
-          className="mt-auto w-full flex items-center space-x-3 text-[var(--kcal-text-muted)] hover:text-[var(--kcal-coral)] px-5 py-4 rounded-[var(--radius-lg)] transition-all font-bold"
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="text-sm">Log Out</span>
-        </button>
-      </nav>
-
-      {/* Mobile Bottom Navigation */}
-      <nav className="lg:hidden fixed bottom-0 left-0 w-full bg-[var(--kcal-white)] border-t border-[var(--kcal-green-light)] px-4 py-2 flex justify-between items-center shadow-[0_-10px_30px_rgba(0,0,0,0.03)] z-50">
-        <button className="kcal-nav-item active">
-          <LayoutDashboard className="w-6 h-6" />
-        </button>
-        <button
-          onClick={() => navigate("/meal-plan")}
-          className="kcal-nav-item"
-        >
-          <Utensils className="w-6 h-6" />
-        </button>
-        <div className="relative -top-8">
-          <button className="bg-[var(--kcal-green)] p-5 rounded-full text-white shadow-xl shadow-[#91C788]/40 active:scale-95 transition-all">
-            <Plus className="w-7 h-7" />
-          </button>
-        </div>
-        <button onClick={() => navigate("/chat")} className="kcal-nav-item">
-          <MessageSquare className="w-6 h-6" />
-        </button>
-        <button className="kcal-nav-item" onClick={handleLogout}>
-          <LogOut className="w-6 h-6" />
-        </button>
-      </nav>
+    <div className="min-h-screen bg-surface-off-white flex flex-col">
+      {/* Top App Bar */}
+      <TopAppBar />
 
       {/* Main Content */}
-      <main className="flex-1 p-4 sm:p-6 md:p-10 lg:p-16 overflow-y-auto max-w-7xl mx-auto w-full">
-        <AchievementToast
-          isVisible={showToast}
-          message="Progress updated! Stay healthy."
-          onClose={() => setShowToast(false)}
-        />
+      <main className="flex-1 pt-16 pb-24 md:pb-8">
+        <div className="max-w-[1200px] mx-auto px-[24px] md:px-8 space-y-[32px] mt-6">
 
-        <header className="mb-12 md:mb-16 flex flex-col lg:flex-row lg:justify-between lg:items-center gap-8">
-          <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <div className="h-px w-8 bg-[var(--kcal-green)] hidden md:block"></div>
-              <h2 className="text-[var(--kcal-green)] font-black text-[10px] md:text-xs uppercase tracking-[0.3em]">
-                KCAL Intelligence Platform
-              </h2>
-            </div>
-            <h1 className="text-4xl md:text-5xl lg:text-7xl font-black text-[var(--kcal-text-main)] tracking-tighter leading-[0.95] max-w-3xl">
-              Find, track and eat <span className="text-[var(--kcal-green)]">healthy</span> food.
+          <AchievementToast
+            isVisible={showToast}
+            message="Progress updated! Stay healthy."
+            onClose={() => setShowToast(false)}
+          />
+
+          {/* Greeting */}
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="space-y-1"
+          >
+            <h1 className="font-headline text-2xl md:text-[32px] font-semibold text-text-rich-black leading-tight tracking-tight">
+              {getGreeting()}, {user?.name?.split(' ')[0] || 'there'} 👋
             </h1>
-          </div>
-          <div className="hidden lg:flex bg-[var(--kcal-white)] border border-[var(--kcal-green-light)] px-8 py-6 rounded-[3rem] items-center space-x-6 shadow-sm hover:shadow-md transition-shadow">
-            <div className="bg-[var(--kcal-coral-light)] p-3 rounded-2xl">
-              <Flame className="w-6 h-6 text-[var(--kcal-coral)]" />
-            </div>
-            <div>
-              <p className="text-[10px] font-black text-[var(--kcal-text-muted)] uppercase tracking-widest mb-1">Current Momentum</p>
-              <p className="font-black text-[var(--kcal-text-main)] text-lg">{user?.streakCount || 1} Day Streak</p>
-            </div>
-          </div>
-        </header>
+            <p className="text-sm md:text-base text-on-surface-variant">
+              Here's your nutrition summary for today.
+            </p>
+          </motion.section>
 
-        <div className="flex flex-col space-y-12 md:space-y-20">
-          {/* Top Row: Search & Scan */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
-            <div className="h-full">
-              <FoodSearch onAddFood={handleAddFood} />
+          {/* ════ Daily Calories Card ════ */}
+          <motion.section
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="bg-surface-container-lowest rounded-2xl p-6 card-shadow-soft border border-outline-variant/30"
+          >
+            <div className="flex items-center gap-2 mb-5">
+              <span className="material-symbols-outlined text-primary">local_fire_department</span>
+              <h2 className="font-headline text-lg font-semibold text-on-surface">Daily Calories</h2>
             </div>
-            <div className="h-full">
-              <BarcodeScanner onAddFood={handleAddFood} />
-            </div>
-          </div>
 
-          {/* Middle Row: Mood Status */}
-          <div className="w-full">
-            <DailyCheckIn />
-          </div>
+            <div className="flex flex-col md:flex-row items-center gap-8">
+              {/* Circular Progress Ring */}
+              <div className="relative w-44 h-44 md:w-52 md:h-52 flex-shrink-0">
+                <div
+                  className="w-full h-full rounded-full flex items-center justify-center circular-progress"
+                  style={{
+                    '--progress-pct': `${caloriePct}%`,
+                    '--progress-color': '#3a6937',
+                  }}
+                >
+                  <div className="text-center">
+                    <p className="font-headline text-3xl md:text-4xl font-bold text-text-rich-black leading-none">
+                      {Math.round(log.totals.calories)}
+                    </p>
+                    <p className="text-xs text-on-surface-variant font-semibold uppercase tracking-widest mt-1">
+                      of {calorieGoal.toLocaleString()} kcal
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-          {/* Progress Section */}
-          <div className="kcal-card flex flex-col">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-lg font-black text-[var(--kcal-text-main)] uppercase tracking-tight">
-                Nutritional Velocity
-              </h3>
-              <div className="flex bg-[var(--kcal-coral-light)] px-4 py-2 rounded-full items-center space-x-2">
-                <Flame className="w-4 h-4 text-[var(--kcal-coral)]" />
-                <span className="font-bold text-[var(--kcal-coral)] text-xs">
-                  {user?.streakCount || 1} Day Streak
-                </span>
+              {/* Calorie info text */}
+              <div className="flex-1 text-center md:text-left space-y-3">
+                <p className="text-sm md:text-base text-on-surface-variant leading-relaxed">
+                  You've consumed <span className="font-bold text-primary">{Math.round(log.totals.calories)}</span> of your <span className="font-bold text-text-rich-black">{calorieGoal.toLocaleString()}</span> kcal goal today.
+                  {caloriePct < 50 ? " Keep going!" : caloriePct < 90 ? " Great progress!" : " Almost there!"}
+                </p>
+                <div className="flex items-center gap-2 justify-center md:justify-start">
+                  <div className="bg-primary-container/20 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-primary text-[16px]">trending_up</span>
+                    <span className="text-xs font-bold text-primary">{user?.streakCount ?? 0} Day Streak</span>
+                  </div>
+                </div>
               </div>
             </div>
+          </motion.section>
 
-            <div className="flex-1 flex items-center justify-center min-h-[350px] w-full">
-              <MacroChart totals={log.totals} />
+          {/* ════ Macro Breakdown Grid ════ */}
+          <motion.section
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+            className="grid grid-cols-1 md:grid-cols-3 gap-4"
+          >
+            {/* Protein Card */}
+            <div className="bg-surface-container-lowest rounded-xl p-5 card-shadow-soft border border-outline-variant/30">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-data-protein"></div>
+                  <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Protein</span>
+                </div>
+                <span className="font-headline text-lg font-bold text-text-rich-black">{Math.round(log.totals.protein)}g</span>
+              </div>
+              <div className="w-full h-2.5 bg-surface-container-low rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${proteinPct}%` }}
+                  transition={{ duration: 0.8, delay: 0.3 }}
+                  className="h-full bg-data-protein rounded-full"
+                />
+              </div>
+              <p className="text-[11px] text-on-surface-variant mt-2 font-medium">
+                {Math.round(log.totals.protein)} / {proteinGoal}g
+              </p>
             </div>
+
+            {/* Carbs Card */}
+            <div className="bg-surface-container-lowest rounded-xl p-5 card-shadow-soft border border-outline-variant/30">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-data-carbs"></div>
+                  <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Carbs</span>
+                </div>
+                <span className="font-headline text-lg font-bold text-text-rich-black">{Math.round(log.totals.carbs)}g</span>
+              </div>
+              <div className="w-full h-2.5 bg-surface-container-low rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${carbsPct}%` }}
+                  transition={{ duration: 0.8, delay: 0.4 }}
+                  className="h-full bg-data-carbs rounded-full"
+                />
+              </div>
+              <p className="text-[11px] text-on-surface-variant mt-2 font-medium">
+                {Math.round(log.totals.carbs)} / {carbsGoal}g
+              </p>
+            </div>
+
+            {/* Fats Card */}
+            <div className="bg-surface-container-lowest rounded-xl p-5 card-shadow-soft border border-outline-variant/30">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-data-fats"></div>
+                  <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Fats</span>
+                </div>
+                <span className="font-headline text-lg font-bold text-text-rich-black">{Math.round(log.totals.fats)}g</span>
+              </div>
+              <div className="w-full h-2.5 bg-surface-container-low rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${fatsPct}%` }}
+                  transition={{ duration: 0.8, delay: 0.5 }}
+                  className="h-full bg-data-fats rounded-full"
+                />
+              </div>
+              <p className="text-[11px] text-on-surface-variant mt-2 font-medium">
+                {Math.round(log.totals.fats)} / {fatsGoal}g
+              </p>
+            </div>
+          </motion.section>
+
+          {/* ════ Tab Switch: Overview / Search / Check-in ════ */}
+          <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-[24px] px-[24px]">
+            {[
+              { key: "overview", icon: "bar_chart", label: "Overview" },
+              { key: "pantry", icon: "kitchen", label: "My Pantry" },
+              { key: "search", icon: "search", label: "Search Food" },
+              { key: "scan", icon: "qr_code_scanner", label: "Barcode" },
+              { key: "checkin", icon: "mood", label: "Check-in" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === tab.key
+                    ? "bg-primary text-on-primary shadow-sm"
+                    : "bg-surface-container-lowest border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-low"
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          {/* Collapsible Logged Items */}
-          <div className="kcal-card p-0 overflow-hidden">
-            <button 
-              onClick={() => setShowLoggedItems(!showLoggedItems)}
-              className="w-full flex items-center justify-between p-6 hover:bg-[var(--kcal-green-light)] transition-colors group"
-            >
-              <div className="flex items-center space-x-4">
-                <div className="bg-[var(--kcal-green-light)] p-3 rounded-xl group-hover:bg-white transition-colors">
-                  <Utensils className="w-5 h-5 text-[var(--kcal-green)]" />
-                </div>
-                <div className="text-left">
-                  <h3 className="text-lg font-black text-[var(--kcal-text-main)] uppercase tracking-tight">
-                    Logged Nutrients
+          {/* ════ Tab Content ════ */}
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            {activeTab === "overview" && (
+              <div className="space-y-[32px]">
+                {/* Nutritional Velocity Chart */}
+                <div className="bg-surface-container-lowest rounded-2xl p-6 card-shadow-soft border border-outline-variant/30">
+                  <h3 className="font-headline text-base font-semibold text-on-surface mb-4 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">analytics</span>
+                    Nutritional Velocity
                   </h3>
-                  <p className="text-[10px] font-bold text-[var(--kcal-text-muted)] uppercase tracking-widest">
-                    {log.foodItems?.length || 0} ITEMS CONSUMED TODAY
-                  </p>
+                  <div className="min-h-[300px] w-full flex items-center justify-center">
+                    <MacroChart totals={log.totals} />
+                  </div>
+                </div>
+
+                {/* Recent Meals / Logged Items */}
+                <div className="bg-surface-container-lowest rounded-2xl card-shadow-soft border border-outline-variant/30 overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/20">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary">restaurant</span>
+                      <h3 className="font-headline text-base font-semibold text-on-surface">Recent Meals</h3>
+                    </div>
+                    <span className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-widest">
+                      {log.foodItems?.length || 0} items
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-outline-variant/15">
+                    {log.foodItems?.length === 0 && (
+                      <div className="text-center py-10 px-6">
+                        <span className="material-symbols-outlined text-outline-variant text-[40px] mb-3 block">lunch_dining</span>
+                        <p className="text-sm text-on-surface-variant font-medium">
+                          No meals logged yet today.
+                        </p>
+                        <p className="text-xs text-outline mt-1">Search for food above to start tracking.</p>
+                      </div>
+                    )}
+                    {log.foodItems?.map((item, idx) => (
+                      <motion.div
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        key={idx}
+                        className="flex items-center justify-between px-5 py-4 hover:bg-surface-container-low/30 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-primary-container/15 flex items-center justify-center flex-shrink-0">
+                            <span className="material-symbols-outlined text-primary text-[20px]">nutrition</span>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-text-rich-black">
+                              {item.foodId?.name || "Unknown Food"}
+                            </p>
+                            <p className="text-[11px] text-on-surface-variant font-medium">
+                              {item.servings} serving{item.servings > 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-headline text-sm font-bold text-primary">
+                            {item.foodId?.calories
+                              ? Math.round(item.foodId.calories * item.servings)
+                              : 0}
+                          </p>
+                          <p className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">kcal</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div className={`p-2 rounded-full border border-[var(--kcal-green-light)] transition-transform duration-300 ${showLoggedItems ? 'rotate-180' : ''}`}>
-                <ChevronDown className="w-5 h-5 text-[var(--kcal-green)]" />
+            )}
+
+            {activeTab === "pantry" && (
+              <PantryManager />
+            )}
+
+            {activeTab === "search" && (
+              <div className="bg-surface-container-lowest rounded-2xl p-5 card-shadow-soft border border-outline-variant/30">
+                <FoodSearch onAddFood={handleAddFood} />
+              </div>
+            )}
+
+            {activeTab === "scan" && (
+              <div className="bg-surface-container-lowest rounded-2xl p-5 card-shadow-soft border border-outline-variant/30">
+                <BarcodeScanner onAddFood={handleAddFood} />
+              </div>
+            )}
+
+            {activeTab === "checkin" && (
+              <div className="bg-surface-container-lowest rounded-2xl p-5 card-shadow-soft border border-outline-variant/30">
+                <DailyCheckIn />
+              </div>
+            )}
+          </motion.div>
+
+          {/* Desktop-only: Quick Actions */}
+          <div className="hidden md:grid grid-cols-3 gap-4">
+            <button
+              onClick={() => navigate("/meal-plan")}
+              className="bg-surface-container-lowest rounded-xl p-5 card-shadow-soft border border-outline-variant/30 flex items-center gap-3 hover:shadow-md hover:border-primary/30 transition-all group cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-primary-container/15 flex items-center justify-center group-hover:bg-primary-container/30 transition-colors">
+                <span className="material-symbols-outlined text-primary">restaurant_menu</span>
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-text-rich-black">Meal Plan</p>
+                <p className="text-[11px] text-on-surface-variant">Generate AI plans</p>
               </div>
             </button>
 
-            <motion.div
-              initial={false}
-              animate={{ height: showLoggedItems ? 'auto' : 0, opacity: showLoggedItems ? 1 : 0 }}
-              className="overflow-hidden"
+            <button
+              onClick={() => navigate("/chat")}
+              className="bg-surface-container-lowest rounded-xl p-5 card-shadow-soft border border-outline-variant/30 flex items-center gap-3 hover:shadow-md hover:border-primary/30 transition-all group cursor-pointer"
             >
-              <div className="p-6 pt-0 border-t border-[var(--kcal-green-light)] bg-[var(--kcal-cream)]/30">
-                <div className="space-y-3 mt-6">
-                  {log.foodItems?.length === 0 && (
-                    <div className="text-center py-12 bg-white rounded-[var(--radius-lg)] border border-dashed border-[var(--kcal-green-light)]">
-                      <p className="text-sm text-[var(--kcal-text-muted)] font-medium">
-                        Your intake log is empty.
-                      </p>
-                    </div>
-                  )}
-                  {log.foodItems?.map((item, idx) => (
-                    <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.05 }}
-                      key={idx}
-                      className="flex justify-between items-center bg-white p-4 rounded-[var(--radius-lg)] shadow-sm border border-[var(--kcal-green-light)]/30"
-                    >
-                      <div className="flex flex-col">
-                        <span className="font-bold text-[var(--kcal-text-main)] text-sm md:text-base">
-                          {item.foodId?.name || "Unknown Food"}
-                        </span>
-                        <span className="text-[10px] text-[var(--kcal-text-muted)] font-bold uppercase tracking-widest">
-                          {item.servings} unit{item.servings > 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[var(--kcal-green)] font-black text-sm md:text-base">
-                          {item.foodId?.calories
-                            ? Math.round(item.foodId.calories * item.servings)
-                            : 0}
-                        </p>
-                        <p className="text-[8px] font-black text-[var(--kcal-text-muted)] uppercase tracking-tighter">KCAL</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+              <div className="w-10 h-10 rounded-xl bg-primary-container/15 flex items-center justify-center group-hover:bg-primary-container/30 transition-colors">
+                <span className="material-symbols-outlined text-primary">smart_toy</span>
               </div>
-            </motion.div>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-text-rich-black">AI Coach</p>
+                <p className="text-[11px] text-on-surface-variant">Chat with Mezan</p>
+              </div>
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="bg-surface-container-lowest rounded-xl p-5 card-shadow-soft border border-outline-variant/30 flex items-center gap-3 hover:shadow-md hover:border-error/30 transition-all group cursor-pointer"
+            >
+              <div className="w-10 h-10 rounded-xl bg-error-container/30 flex items-center justify-center group-hover:bg-error-container/50 transition-colors">
+                <span className="material-symbols-outlined text-error">logout</span>
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold text-text-rich-black">Log Out</p>
+                <p className="text-[11px] text-on-surface-variant">Sign out safely</p>
+              </div>
+            </button>
           </div>
         </div>
       </main>
+
+      {/* Mobile Bottom Nav */}
+      <BottomNav />
     </div>
   );
 };

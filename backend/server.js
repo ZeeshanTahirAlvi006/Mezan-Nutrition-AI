@@ -36,12 +36,30 @@ if (process.env.JWT_SECRET.length < 32) {
 
 // CORS Configuration (Must be at the top to handle preflight)
 const corsOptions = {
-  origin: [
-    process.env.FRONTEND_URL,
-    'https://mezannutritionai.vercel.app', // Explicitly allow your Vercel domain
-    'http://localhost:5173',
-    'http://127.0.0.1:5173'
-  ].filter(Boolean),
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      'https://mezannutritionai.vercel.app',
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'http://localhost:5713',
+      'http://127.0.0.1:5713',
+      'http://localhost:5714',
+      'http://127.0.0.1:5714'
+    ].filter(Boolean);
+
+    // Dynamically match any localhost or 127.0.0.1 with any port for local development
+    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
+    if (allowedOrigins.indexOf(origin) !== -1 || isLocalhost) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -125,7 +143,7 @@ const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 
 // Handle client-side routing (SPA)
-app.get('*', (req, res) => {
+app.get(/.*/, (req, res) => {
   if (!req.path.startsWith('/api')) {
     res.sendFile(path.join(distPath, 'index.html'));
   } else {

@@ -35,18 +35,18 @@ const AgentActionState = ({ toolName, toolArgs, result, isExecuting }) => {
   return (
     <div className="my-2 ml-14 max-w-[85%] md:max-w-[70%]">
       <div 
-        className={`flex items-center justify-between p-3 rounded-xl border ${isExecuting ? 'border-(--kcal-green) bg-(--kcal-green-light)' : 'border-(--kcal-green-light) bg-white'} transition-colors cursor-pointer shadow-sm`}
+        className={`flex items-center justify-between p-3 rounded-xl border ${isExecuting ? 'border-primary bg-primary-container/10' : 'border-outline-variant/30 bg-white'} transition-colors cursor-pointer shadow-sm`}
         onClick={() => setExpanded(!expanded)}
       >
-        <div className="flex items-center space-x-3 text-sm text-(--kcal-text-main)">
-          <div className={isExecuting ? 'animate-pulse text-(--kcal-green)' : 'text-(--kcal-green)'}>
-            {isExecuting ? info.icon : <CheckCircle2 className="w-4 h-4" />}
+        <div className="flex items-center space-x-3 text-sm text-text-rich-black">
+          <div className={isExecuting ? 'animate-pulse text-primary' : 'text-primary'}>
+            {isExecuting ? info.icon : <CheckCircle2 className="w-4 h-4 text-primary" />}
           </div>
-          <span className="font-semibold">{info.message}</span>
+          <span className="font-semibold text-xs md:text-sm">{info.message}</span>
         </div>
         
         {!isExecuting && result && (
-          <button className="text-(--kcal-text-muted) hover:text-(--kcal-green) transition-colors">
+          <button className="text-on-surface-variant hover:text-primary transition-colors">
             {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
         )}
@@ -60,7 +60,7 @@ const AgentActionState = ({ toolName, toolArgs, result, isExecuting }) => {
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="mt-2 p-4 bg-(--kcal-cream) rounded-xl border border-(--kcal-green-light) text-[10px] text-(--kcal-text-muted) overflow-x-auto font-mono whitespace-pre-wrap shadow-inner leading-relaxed">
+            <div className="mt-2 p-4 bg-surface-off-white rounded-xl border border-outline-variant/20 text-[10px] text-on-surface-variant overflow-x-auto font-mono whitespace-pre-wrap shadow-inner leading-relaxed">
               {result}
             </div>
           </motion.div>

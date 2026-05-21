@@ -1,27 +1,18 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useContext } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import client from "../api/client";
-import {
-  ArrowLeft,
-  Send,
-  Bot,
-  Sparkles,
-  Bug,
-  RefreshCw,
-  PlusCircle,
-  LayoutDashboard,
-  Utensils,
-  MessageSquare,
-  LogOut,
-  User,
-} from "lucide-react";
 import { motion } from "framer-motion";
 import MessageBubble from "../components/chat/MessageBubble";
 import AgentActionState from "../components/chat/AgentActionState";
+import TopAppBar from "../components/layout/TopAppBar";
+import BottomNav from "../components/layout/BottomNav";
+import { AuthContext } from "../context/AuthContext";
+import { ArrowLeft } from "lucide-react";
 
 const Chat = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useContext(AuthContext);
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -35,6 +26,12 @@ const Chat = () => {
     "What have I eaten today?",
     "Analyze my macros for yesterday",
     "Am I on track for my protein goals?",
+  ];
+
+  const quickReplies = [
+    "More suggestions",
+    "Log this meal",
+    "Check my macros",
   ];
 
   const scrollToBottom = () => {
@@ -51,14 +48,18 @@ const Chat = () => {
       try {
         setLoading(true);
         // 1. Try URL param, then localStorage, then new session
-        const targetId = id || localStorage.getItem('lastSessionId');
-        
-        const { data } = await client.post("/api/chat/session", { sessionId: targetId });
+        const targetId = id || localStorage.getItem("lastSessionId");
+
+        const { data } = await client.post("/api/chat/session", {
+          sessionId: targetId,
+        });
         setSessionId(data._id);
-        localStorage.setItem('lastSessionId', data._id);
+        localStorage.setItem("lastSessionId", data._id);
 
         // 2. Load existing messages if this is a resumed session
-        const { data: history } = await client.get(`/api/chat/session/${data._id}/messages`);
+        const { data: history } = await client.get(
+          `/api/chat/session/${data._id}/messages`,
+        );
         if (history && history.length > 0) {
           setMessages(history);
         } else {
@@ -67,7 +68,7 @@ const Chat = () => {
               _id: "welcome",
               role: "assistant",
               content:
-                "Hello! I am your Antigravity AI Coach. How can I help you reach your nutrition goals today?",
+                "Hello! I'm your Mezan AI Coach. How can I help you balance your nutrition today?",
             },
           ]);
         }
@@ -78,7 +79,7 @@ const Chat = () => {
       }
     };
     initSession();
-  }, []);
+  }, [id]);
 
   const executeAgentLoop = async (userText, imageUrl = null) => {
     if (!sessionId || !userText.trim()) return;
@@ -112,7 +113,7 @@ const Chat = () => {
         );
 
         console.log("AI Response Received:", aiResponse);
-        
+
         // Add message to UI (MessageBubble will hide it if content is empty)
         setMessages((prev) => [...prev, aiResponse]);
 
@@ -194,7 +195,7 @@ const Chat = () => {
           _id: "welcome",
           role: "assistant",
           content:
-            "Hello! I am your Antigravity AI Coach. How can I help you reach your nutrition goals today?",
+            "Hello! I'm your Mezan AI Coach. How can I help you balance your nutrition today?",
         },
       ]);
     } catch (error) {
@@ -208,195 +209,170 @@ const Chat = () => {
   };
 
   return (
-    <div className="min-h-screen bg-(--kcal-cream) flex flex-col pb-24 lg:pb-0 lg:pl-72">
-      {/* Desktop Sidebar Navigation */}
-      <nav className="hidden lg:flex fixed left-0 top-0 h-full w-72 bg-(--kcal-white) border-r border-(--kcal-green-light) p-10 flex-col shadow-sm z-30">
-        <div className="mb-12">
-          <h1 className="text-3xl font-extrabold text-(--kcal-green) tracking-tighter">
-            kcal
-          </h1>
-        </div>
-
-        <div className="flex-1 space-y-2">
+    <div className="min-h-screen bg-surface-off-white flex flex-col">
+      {/* Top App Bar */}
+      <header className="w-full sticky top-0 bg-surface-container-lowest/90 backdrop-blur-md z-40 shadow-sm">
+        <div className="flex justify-between items-center px-[24px] py-3 max-w-[800px] mx-auto">
           <button
             onClick={() => navigate("/dashboard")}
-            className="w-full flex items-center space-x-3 text-(--kcal-text-muted) hover:text-(--kcal-green) px-5 py-4 rounded-(--radius-lg) transition-all font-bold"
+            className="flex items-center gap-2 text-xs font-bold text-on-surface-variant hover:text-primary transition-all cursor-pointer group bg-surface-container-lowest border border-outline-variant/30 px-4 py-2 rounded-full shadow-sm"
           >
-            <LayoutDashboard className="w-5 h-5" />
-            <span className="text-sm">Dashboard</span>
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+            <span className="hidden sm:inline">Back to Dashboard</span>
+            <span className="sm:hidden">Back</span>
           </button>
-          <button
-            onClick={() => navigate("/meal-plan")}
-            className="w-full flex items-center space-x-3 text-(--kcal-text-muted) hover:text-(--kcal-green) px-5 py-4 rounded-(--radius-lg) transition-all font-bold"
-          >
-            <Utensils className="w-5 h-5" />
-            <span className="text-sm">Meal Plan</span>
-          </button>
-          <button className="w-full flex items-center space-x-3 bg-(--kcal-green-light) text-(--kcal-green) px-5 py-4 rounded-(--radius-lg) transition-all font-bold">
-            <MessageSquare className="w-5 h-5" />
-            <span className="text-sm">AI Coach</span>
-          </button>
-        </div>
 
-        <button
-          onClick={handleLogout}
-          className="mt-auto w-full flex items-center space-x-3 text-(--kcal-text-muted) hover:text-(--kcal-coral) px-5 py-4 rounded-(--radius-lg) transition-all font-bold"
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="text-sm">Log Out</span>
-        </button>
-      </nav>
+          <div className="font-headline text-xl font-bold text-primary">Mezan میزان</div>
 
-      {/* Mobile Bottom Navigation */}
-      <nav className="lg:hidden fixed bottom-0 left-0 w-full bg-(--kcal-white) border-t border-(--kcal-green-light) px-4 py-2 flex justify-between items-center shadow-[0_-10px_30px_rgba(0,0,0,0.03)] z-50">
-        <button
-          onClick={() => navigate("/dashboard")}
-          className="kcal-nav-item"
-        >
-          <LayoutDashboard className="w-6 h-6" />
-        </button>
-        <button
-          onClick={() => navigate("/meal-plan")}
-          className="kcal-nav-item"
-        >
-          <Utensils className="w-6 h-6" />
-        </button>
-        <div className="relative -top-8">
-          <button className="bg-(--kcal-green) p-5 rounded-full text-white shadow-xl shadow-[#91C788]/40 active:scale-95 transition-all">
-            <Bot className="w-7 h-7" />
-          </button>
-        </div>
-        <button className="kcal-nav-item active">
-          <MessageSquare className="w-6 h-6" />
-        </button>
-        <button className="kcal-nav-item" onClick={handleLogout}>
-          <LogOut className="w-6 h-6" />
-        </button>
-      </nav>
-      {/* Header */}
-      <header className="bg-(--kcal-white) p-6 flex items-center justify-between border-b border-(--kcal-green-light) sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center space-x-4">
-          <div className="bg-(--kcal-green-light) p-3 rounded-xl">
-            <Bot className="w-5 h-5 text-(--kcal-green)" />
+          <div className="flex items-center gap-2">
+            {/* Debug Toggle */}
+            <button
+              onClick={() => setDebugMode(!debugMode)}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                debugMode
+                  ? "bg-primary text-on-primary shadow-sm"
+                  : "hover:bg-surface-container-low text-on-surface-variant"
+              }`}
+              title="Debug Mode"
+            >
+              <span className="material-symbols-outlined text-[20px]">bug_report</span>
+            </button>
+
+            {/* New Session */}
+            <button
+              onClick={startNewSession}
+              className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-low text-on-surface-variant transition-colors active:scale-95 duration-150 cursor-pointer"
+              title="New Chat"
+            >
+              <span className="material-symbols-outlined text-[20px]">add_comment</span>
+            </button>
           </div>
-          <div>
-            <h1 className="font-black text-lg tracking-tight text-(--kcal-text-main)">
-              AI Coach
-            </h1>
-            <p className="text-[10px] text-(--kcal-text-muted) flex items-center font-bold uppercase tracking-[0.1em]">
-              <Sparkles className="w-3 h-3 mr-1.5 text-(--kcal-green)" />{" "}
-              Powered by KCAL Intelligence
-            </p>
-          </div>
-        </div>
-
-        <div className="flex space-x-3">
-          <button
-            onClick={() => setDebugMode(!debugMode)}
-            className={`p-3 rounded-lg transition-all border ${debugMode ? "bg-(--kcal-green) text-white border-(--kcal-green) shadow-md" : "bg-(--kcal-white) border-(--kcal-green-light) text-(--kcal-text-muted) hover:text-(--kcal-green)"}`}
-            title="DEBUG MODE"
-          >
-            <Bug className="w-5 h-5" />
-          </button>
-          <button
-            onClick={startNewSession}
-            className="p-3 bg-(--kcal-white) border border-(--kcal-green-light) text-(--kcal-text-muted) hover:text-(--kcal-green) rounded-lg transition-all"
-            title="NEW SESSION"
-          >
-            <RefreshCw className="w-5 h-5" />
-          </button>
         </div>
       </header>
 
-      {/* Chat Area */}
-      <main className="flex-1 overflow-y-auto p-6 space-y-6 md:px-12 max-w-7xl mx-auto w-full pb-32 custom-scrollbar">
-        {messages.map((msg, idx) => {
-          if (msg.role === "tool" && !debugMode) return null;
+      {/* Chat Canvas */}
+      <main className="flex-grow flex flex-col max-w-[800px] w-full mx-auto px-[24px] py-6 overflow-y-auto pb-52 md:pb-36">
 
-          if (msg.role === "tool") {
-            return (
-              <div
-                key={msg._id || idx}
-                className="text-[10px] font-mono bg-(--kcal-green-light) p-4 rounded-xl text-(--kcal-green) my-4 border border-(--kcal-green-light) shadow-sm"
-              >
-                <span className="font-black mr-2 uppercase tracking-widest">
-                  [SYSTEM_LOG]
-                </span>{" "}
-                {msg.name}: {msg.content}
-              </div>
-            );
-          }
 
-          return (
-            <React.Fragment key={msg._id || idx}>
-              <MessageBubble message={msg} />
-              {debugMode && msg.toolCalls && msg.toolCalls.length > 0 && (
-                <div className="text-[10px] font-mono bg-white p-4 rounded-xl text-(--kcal-text-muted) my-2 border border-(--kcal-green-light)">
-                  <span className="font-black mr-2 text-(--kcal-green) uppercase tracking-widest">
-                    [CALL_LOG]
-                  </span>{" "}
-                  {JSON.stringify(msg.toolCalls[0])}
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
+        {/* Date Badge */}
+        <div className="text-center mb-6">
+          <span className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-widest bg-surface-container-lowest px-4 py-1.5 rounded-full shadow-sm border border-outline-variant/20">
+            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+          </span>
+        </div>
 
-        {/* Render Agent Action State */}
-        {agentState && (
-          <AgentActionState
-            toolName={agentState.toolName}
-            toolArgs={agentState.toolArgs}
-            result={agentState.result}
-            isExecuting={agentState.isExecuting}
-          />
-        )}
+        {/* Messages */}
+        <div className="space-y-4">
+          {messages.map((msg, idx) => {
+            if (msg.role === "tool" && !debugMode) return null;
 
-        {loading && !agentState?.isExecuting && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex justify-start my-6"
-          >
-            <div className="flex bg-(--kcal-green-light) p-5 rounded-2xl rounded-tl-none space-x-3 ml-14 shadow-sm border border-white/50">
-              <div className="w-2 h-2 bg-(--kcal-green) rounded-full animate-bounce"></div>
-              <div
-                className="w-2 h-2 bg-(--kcal-green) rounded-full animate-bounce"
-                style={{ animationDelay: "0.2s" }}
-              ></div>
-              <div
-                className="w-2 h-2 bg-(--kcal-green) rounded-full animate-bounce"
-                style={{ animationDelay: "0.4s" }}
-              ></div>
-            </div>
-          </motion.div>
-        )}
-        <div ref={messagesEndRef} />
-      </main>
-
-      {/* Input Area */}
-      <footer className="bg-(--kcal-white) p-6 border-t border-(--kcal-green-light) fixed bottom-24 lg:bottom-0 left-0 lg:left-72 right-0 z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.02)]">
-        <div className="max-w-4xl mx-auto flex flex-col space-y-4">
-          {/* Suggested Questions */}
-          {messages.length < 3 && (
-            <div className="flex space-x-3 overflow-x-auto pb-2 custom-scrollbar">
-              {suggestedQuestions.map((q, i) => (
-                <button
-                  key={i}
-                  onClick={() => executeAgentLoop(q)}
-                  className="whitespace-nowrap px-6 py-3 bg-(--kcal-white) border border-(--kcal-green-light) hover:border-(--kcal-green) text-(--kcal-text-muted) hover:text-(--kcal-green) rounded-xl text-xs font-bold transition-all shadow-sm"
+            if (msg.role === "tool") {
+              return (
+                <div
+                  key={msg._id || idx}
+                  className="text-[10px] font-mono bg-primary-container/10 p-4 rounded-xl text-primary my-2 border border-primary/25 shadow-sm"
                 >
-                  {q}
-                </button>
-              ))}
-            </div>
+                  <span className="font-black mr-2 uppercase tracking-widest">
+                    [SYSTEM_LOG]
+                  </span>
+                  {msg.name}: {msg.content}
+                </div>
+              );
+            }
+
+            return (
+              <React.Fragment key={msg._id || idx}>
+                {msg.role === "assistant" ? (
+                  /* AI Message Bubble */
+                  <div className="flex items-start gap-3 max-w-[90%]">
+                    <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
+                      <span className="material-symbols-outlined text-on-primary-container text-[18px] fill-icon">smart_toy</span>
+                    </div>
+                    <div>
+                      <MessageBubble message={msg} />
+                    </div>
+                  </div>
+                ) : (
+                  /* User Message Bubble */
+                  <div className="flex items-end justify-end w-full">
+                    <div className="max-w-[85%]">
+                      <MessageBubble message={msg} />
+                    </div>
+                  </div>
+                )}
+
+                {debugMode && msg.toolCalls && msg.toolCalls.length > 0 && (
+                  <div className="text-[10px] font-mono bg-white p-4 rounded-xl text-on-surface-variant my-2 border border-outline-variant/30">
+                    <span className="font-black mr-2 text-primary uppercase tracking-widest">
+                      [CALL_LOG]
+                    </span>
+                    {JSON.stringify(msg.toolCalls[0])}
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
+
+          {/* Agent Action State */}
+          {agentState && (
+            <AgentActionState
+              toolName={agentState.toolName}
+              toolArgs={agentState.toolArgs}
+              result={agentState.result}
+              isExecuting={agentState.isExecuting}
+            />
           )}
 
-          <form onSubmit={handleSubmit} className="flex space-x-3 items-center">
-            <label
-              className={`p-4 rounded-xl flex items-center justify-center transition-all cursor-pointer border ${sessionId ? "bg-(--kcal-cream) border-(--kcal-green-light) hover:border-(--kcal-green) text-(--kcal-green)" : "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"}`}
+          {/* Typing Indicator */}
+          {loading && !agentState?.isExecuting && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-start gap-3"
             >
-              <PlusCircle className="w-5 h-5" />
+              <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center flex-shrink-0 shadow-sm">
+                <span className="material-symbols-outlined text-on-primary-container text-[18px] fill-icon">smart_toy</span>
+              </div>
+              <div className="bg-surface-container-lowest p-5 rounded-2xl rounded-tl-none shadow-sm border border-outline-variant/30 flex space-x-2">
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+              </div>
+            </motion.div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+      </main>
+
+      {/* Bottom Input Area (Sticky) */}
+      <div className="fixed bottom-[80px] md:bottom-0 left-0 w-full z-40 bg-surface-off-white/95 backdrop-blur-xl border-t border-surface-variant/50 pt-3 pb-5 px-[24px]">
+        <div className="max-w-[800px] mx-auto">
+          {/* Quick Reply Chips */}
+          <div className="flex gap-2 overflow-x-auto pb-3 no-scrollbar -mx-[24px] px-[24px] md:mx-0 md:px-0">
+            {(messages.length < 3 ? suggestedQuestions : quickReplies).map((q, i) => (
+              <button
+                key={i}
+                onClick={() => executeAgentLoop(q)}
+                disabled={loading || !sessionId}
+                className="flex-shrink-0 text-[11px] font-semibold text-primary bg-primary-container/20 border border-primary-container px-4 py-2 rounded-full hover:bg-primary-container/40 transition-colors whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed tracking-wide"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+
+          {/* Input Box */}
+          <form onSubmit={handleSubmit} className="relative flex items-center gap-2">
+            {/* Image Upload */}
+            <label
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${
+                sessionId && !loading
+                  ? "text-on-surface-variant hover:bg-surface-container-low"
+                  : "text-outline-variant/50 cursor-not-allowed"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[22px]">add_photo_alternate</span>
               <input
                 type="file"
                 accept="image/*"
@@ -418,24 +394,31 @@ const Chat = () => {
                 }}
               />
             </label>
+
+            {/* Text Input */}
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask me anything about your nutrition..."
+              placeholder="Ask your AI coach..."
               disabled={!sessionId}
-              className="flex-1 bg-(--kcal-cream) border border-(--kcal-green-light) rounded-xl px-6 py-4 text-(--kcal-text-main) focus:outline-none focus:border-(--kcal-green) transition-all placeholder:text-(--kcal-text-muted) text-sm font-medium shadow-inner"
+              className="flex-1 bg-surface-container-lowest border-none shadow-[0_4px_20px_-4px_rgba(17,24,39,0.05)] rounded-full py-3.5 pl-5 pr-14 focus:ring-2 focus:ring-primary focus:outline-none text-sm text-on-surface placeholder:text-on-surface-variant/50 transition-shadow"
             />
+
+            {/* Send Button */}
             <button
               type="submit"
               disabled={loading || !input.trim() || !sessionId}
-              className="bg-(--kcal-green) disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 text-white p-4 rounded-xl transition-all flex items-center justify-center w-14 shadow-lg shadow-[#91C788]/20 active:scale-95"
+              className="absolute right-1.5 w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm hover:opacity-90 transition-opacity active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
-              <Send className="w-5 h-5 ml-0.5" />
+              <span className="material-symbols-outlined fill-icon text-[20px]">send</span>
             </button>
           </form>
         </div>
-      </footer>
+      </div>
+
+      {/* Mobile Bottom Nav */}
+      <BottomNav />
     </div>
   );
 };

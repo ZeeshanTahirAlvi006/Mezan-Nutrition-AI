@@ -8,16 +8,16 @@ import FoodItem from '../models/FoodItem.js';
 const mistralClient = new Mistral({ apiKey: process.env.MISTRAL_API_KEY || 'dummy_key' });
 
 const groqClient = new Groq({ 
-  apiKey: process.env.GROQ_API_KEY
+  apiKey: process.env.GROQ_API_KEY || 'dummy_key'
 });
 
 const genAI = new GoogleGenerativeAI(
-  process.env.GEMINI_API_KEY
+  process.env.GEMINI_API_KEY || 'dummy_key'
 );
 
 const openRouterClient = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY,
+  apiKey: process.env.OPENROUTER_API_KEY || 'dummy_key',
 });
 
 /**
@@ -122,6 +122,8 @@ const generateChatResponse = async (user, messages) => {
 Your goal is to provide accurate, helpful, and concise nutritional advice.
 Tailor all recommendations to Location: ${user.location || 'UAE'}.
 User Profile: ${user.healthGoals || 'Maintenance'}, Restrictions: ${user.restrictions?.join(', ') || 'None'}.
+Available Items at User's Home (Pantry): ${user.pantry?.length > 0 ? user.pantry.join(', ') : 'None specified yet'}.
+Keep these available home items in mind when recommending meals, recipes, or ingredients. Try to suggest dishes that use these items to reduce food waste and make cooking convenient for them.
 You have access to tools:
 1. search_food_database: Use this to find nutrition data for specific foods.
 2. get_user_food_logs: Use this to see what the user has actually eaten. You can fetch logs for today or any specific date.

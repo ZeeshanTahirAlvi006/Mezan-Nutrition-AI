@@ -26,6 +26,18 @@ export const AuthProvider = ({ children }) => {
     verifyToken();
   }, [token]);
 
+  const refreshUser = async () => {
+    if (token) {
+      try {
+        const { data } = await client.get('/api/users/profile');
+        setUser(data);
+      } catch (error) {
+        console.error("Token verification failed", error);
+        logout();
+      }
+    }
+  };
+
   const login = async (email, password) => {
     const { data } = await client.post('/api/users/login', { email, password });
     setToken(data.token);
@@ -41,7 +53,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

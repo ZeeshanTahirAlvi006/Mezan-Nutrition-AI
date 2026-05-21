@@ -1,11 +1,25 @@
 import DailyLog from '../models/DailyLog.js';
 import FoodItem from '../models/FoodItem.js';
+import { recalculateStreak } from '../utils/streak.js';
 
 // @desc    Create or update daily log
 // @route   POST /api/logs/daily
 const createDailyLog = async (req, res) => {
   try {
     const { date, foodItems } = req.body;
+
+    if (!date) {
+      return res.status(400).json({ message: 'Date is required.' });
+    }
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid date format.' });
+    }
+    const normalizedDate = parsedDate.setHours(0, 0, 0, 0);
+
+    if (!foodItems || !Array.isArray(foodItems)) {
+      return res.status(400).json({ message: 'foodItems must be an array.' });
+    }
 
     // Calculate totals
     let totalCalories = 0;
@@ -26,7 +40,7 @@ const createDailyLog = async (req, res) => {
     // Find if log already exists for this user and date
     let log = await DailyLog.findOne({
       userId: req.user._id,
-      date: new Date(date).setHours(0, 0, 0, 0) // Normalize date to midnight
+      date: normalizedDate
     });
 
     if (log) {
@@ -41,7 +55,7 @@ const createDailyLog = async (req, res) => {
       // Create new
       log = await DailyLog.create({
         userId: req.user._id,
-        date: new Date(date).setHours(0, 0, 0, 0),
+        date: normalizedDate,
         foodItems,
         totals: {
           calories: totalCalories,
@@ -51,6 +65,8 @@ const createDailyLog = async (req, res) => {
         }
       });
     }
+
+    await recalculateStreak(req.user._id);
 
     res.status(201).json(log);
   } catch (error) {
@@ -62,7 +78,12 @@ const createDailyLog = async (req, res) => {
 // @route   GET /api/logs/daily/:date
 const getDailyLog = async (req, res) => {
   try {
-    const date = new Date(req.params.date).setHours(0, 0, 0, 0);
+    const parsedDate = new Date(req.params.date);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid date format.' });
+    }
+    const date = parsedDate.setHours(0, 0, 0, 0);
+
     const log = await DailyLog.findOne({
       userId: req.user._id,
       date: date

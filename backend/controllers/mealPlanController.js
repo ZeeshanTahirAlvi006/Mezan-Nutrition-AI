@@ -7,6 +7,9 @@ import { getCompletionWithFallback } from '../services/aiService.js';
 
 // ---------- Helper: Calculate TDEE using Mifflin-St Jeor ----------
 const calculateTDEE = (user) => {
+  if (user.targetCalories !== undefined && user.targetCalories !== null && user.targetCalories > 0) {
+    return user.targetCalories;
+  }
   const weight = user.weight || 70;
   const height = user.height || 170;
   const age = user.age || 25;
@@ -17,7 +20,7 @@ const calculateTDEE = (user) => {
   // Adjust for goal
   if (user.healthGoals === 'Weight Loss') tdee = Math.round(tdee * 0.8);
   if (user.healthGoals === 'Muscle Gain') tdee = Math.round(tdee * 1.15);
-  return tdee;
+  return tdee || 2000;
 };
 
 // ---------- Helper: Build AI prompt context ----------
@@ -78,6 +81,7 @@ USER PROFILE:
 - Location: ${user.location || 'UAE'}
 - Health Goal: ${user.healthGoals || 'Maintenance'}
 - Dietary Restrictions: ${user.restrictions?.length > 0 ? user.restrictions.join(', ') : 'None'}
+- Items Available at Home (Pantry): ${user.pantry?.length > 0 ? user.pantry.join(', ') : 'None specified (prioritize standard items)'}
 - Daily Calorie Target: ${targetCalories} kcal
 
 RECENT EATING HABITS (last 7 days):
@@ -92,8 +96,9 @@ CRITICAL INSTRUCTIONS:
 1. Each day MUST total close to ${targetCalories} kcal (within 5% tolerance).
 2. ALL food items MUST be commonly available in ${user.location || 'UAE'}. Use local brands and dishes.
 3. Respect dietary restrictions strictly.
-4. Incorporate variety — avoid repeating the same meals across days.
-5. Return ONLY valid JSON — no markdown, no code fences, no explanation.
+4. Keep the user's home items (pantry) in view and prioritize incorporating these ingredients into the generated meals where appropriate, so that the user can use what they already have at home.
+5. Incorporate variety — avoid repeating the same meals across days.
+6. Return ONLY valid JSON — no markdown, no code fences, no explanation.
 
 Return EXACTLY this JSON structure:
 {
@@ -121,20 +126,39 @@ Return EXACTLY this JSON structure:
     try {
       parsed = JSON.parse(raw);
     } catch (e) {
-      // Try to extract JSON from markdown fences if the model wraps it
-      const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (match) {
-        parsed = JSON.parse(match[1]);
+      console.log('[DEBUG] Initial JSON parse failed. Raw response:', raw.substring(0, 500));
+      
+      // Try to extract JSON from markdown fences
+      const markdownMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (markdownMatch) {
+        try {
+          parsed = JSON.parse(markdownMatch[1]);
+        } catch (e2) {
+          console.log('[DEBUG] Markdown extraction failed');
+          throw new Error(`Invalid JSON after markdown extraction: ${e2.message}`);
+        }
       } else {
-        throw new Error('AI returned invalid JSON');
+        // Try to find JSON object pattern and extract it
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            parsed = JSON.parse(jsonMatch[0]);
+          } catch (e2) {
+            console.log('[DEBUG] Direct JSON extraction failed');
+            throw new Error(`Invalid JSON from direct extraction: ${e2.message}`);
+          }
+        } else {
+          throw new Error('No JSON found in AI response');
+        }
       }
     }
 
     res.json({ draft: parsed, targetCalories });
 
   } catch (error) {
-    console.error('Generate Meal Plan Error:', error);
-    res.status(500).json({ message: 'All AI providers are currently busy or reached capacity. Please try again in a moment.' });
+    console.error('Generate Meal Plan Error:', error.message);
+    console.error('Full error:', error);
+    res.status(500).json({ message: 'Failed to generate meal plan: ' + error.message });
   }
 };
 
@@ -276,6 +300,11 @@ const commitReplacement = async (req, res) => {
   try {
     const { dayDate, mealType, foodIndex, newFood } = req.body;
     // newFood = { foodName, calories, protein, carbs, fats }
+
+    const whitelistedMealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snacks'];
+    if (!whitelistedMealTypes.includes(mealType)) {
+      return res.status(400).json({ message: 'Invalid mealType. Permitted values are Breakfast, Lunch, Dinner, Snacks.' });
+    }
 
     if (!newFood || !newFood.foodName) {
       return res.status(400).json({ message: 'newFood with foodName is required.' });

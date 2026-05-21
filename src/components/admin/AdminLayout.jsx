@@ -9,6 +9,7 @@ import {
   CalendarDays,
   LogOut,
   Shield,
+  User,
 } from 'lucide-react';
 
 const navItems = [
@@ -17,6 +18,7 @@ const navItems = [
   { to: '/admin/food', icon: UtensilsCrossed, label: 'Food catalog' },
   { to: '/admin/chat', icon: MessageSquare, label: 'Chat' },
   { to: '/admin/meal-plans', icon: CalendarDays, label: 'Meal plans' },
+  { to: '/profile', icon: User, label: 'My Profile' },
 ];
 
 const AdminLayout = () => {

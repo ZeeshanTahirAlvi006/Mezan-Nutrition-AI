@@ -168,19 +168,50 @@ const updateUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (req.body.isDisabled === true && target._id.equals(req.user._id)) {
-      return res.status(400).json({ message: 'Cannot disable your own account' });
-    }
-
-    if (req.body.role && req.body.role !== 'user') {
-      return res.status(400).json({ message: 'Cannot change role via this endpoint' });
-    }
-
-    const allowed = ['isDisabled', 'age', 'weight', 'height', 'healthGoals', 'restrictions', 'location'];
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        target[key] = req.body[key];
+    if (req.body.isDisabled !== undefined) {
+      if (req.body.isDisabled === true && target._id.equals(req.user._id)) {
+        return res.status(400).json({ message: 'Cannot disable your own account' });
       }
+      target.isDisabled = !!req.body.isDisabled;
+    }
+
+    if (req.body.age !== undefined) {
+      const age = Number(req.body.age);
+      if (isNaN(age) || age < 1 || age > 120 || !Number.isInteger(age)) {
+        return res.status(400).json({ message: 'Age must be an integer between 1 and 120' });
+      }
+      target.age = age;
+    }
+
+    if (req.body.weight !== undefined) {
+      const weight = Number(req.body.weight);
+      if (isNaN(weight) || weight <= 0 || weight > 500) {
+        return res.status(400).json({ message: 'Weight must be a positive number up to 500' });
+      }
+      target.weight = weight;
+    }
+
+    if (req.body.height !== undefined) {
+      const height = Number(req.body.height);
+      if (isNaN(height) || height <= 0 || height > 300) {
+        return res.status(400).json({ message: 'Height must be a positive number up to 300' });
+      }
+      target.height = height;
+    }
+
+    if (req.body.healthGoals !== undefined) {
+      target.healthGoals = String(req.body.healthGoals).trim() || target.healthGoals;
+    }
+
+    if (req.body.restrictions !== undefined) {
+      if (!Array.isArray(req.body.restrictions)) {
+        return res.status(400).json({ message: 'Restrictions must be an array' });
+      }
+      target.restrictions = req.body.restrictions.map(r => String(r).trim());
+    }
+
+    if (req.body.location !== undefined) {
+      target.location = String(req.body.location).trim();
     }
 
     await target.save();

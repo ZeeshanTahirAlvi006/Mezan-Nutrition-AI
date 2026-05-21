@@ -3,10 +3,10 @@ import { RadialBarChart, RadialBar, Legend, Tooltip, ResponsiveContainer } from 
 
 const MacroChart = ({ totals }) => {
   const data = [
-    { name: 'Calories', value: totals.calories || 0, fill: '#91C788' }, // kcal-green
-    { name: 'Protein', value: totals.protein || 0, fill: '#FF8473' },   // kcal-coral
-    { name: 'Carbs', value: totals.carbs || 0, fill: '#FFC857' },       // soft yellow
-    { name: 'Fats', value: totals.fats || 0, fill: '#4E89AE' }          // soft blue
+    { name: 'Calories', value: totals.calories || 0, fill: '#3a6937' }, // brand primary
+    { name: 'Protein', value: totals.protein || 0, fill: '#92C68A' },   // data-protein
+    { name: 'Carbs', value: totals.carbs || 0, fill: '#FCD34D' },       // data-carbs
+    { name: 'Fats', value: totals.fats || 0, fill: '#FB7185' }          // data-fats
   ];
 
   // Detect if screen is small for legend positioning (Sync with platform lg breakpoint)

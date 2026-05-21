@@ -21,7 +21,7 @@ const protect = async (req, res, next) => {
         return res.status(401).json({ message: 'Account has been disabled' });
       }
       
-      next();
+      return next();
     } catch (error) {
       return res.status(401).json({ message: 'Not authorized, token failed' });
     }

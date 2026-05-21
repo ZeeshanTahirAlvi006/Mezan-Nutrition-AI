@@ -1,0 +1,78 @@
+[
+  {
+    "name": "Shan Biryani Masala 50g",
+    "brand": "Shan Foods",
+    "ingredients": "salt, red chili, cumin, turmeric, coriander, garlic, ginger, citric, acid, silicon, dioxide",
+    "macros": {
+      "calories": 120.0,
+      "protein": 2.0,
+      "carbs": 15.0,
+      "fats": 1.5
+    },
+    "halal_status": "Halal",
+    "allergens": {
+      "contains_dairy": false,
+      "contains_gluten": false,
+      "contains_nuts": false,
+      "contains_soy": false,
+      "contains_eggs": false
+    }
+  },
+  {
+    "name": "Olper's Full Cream Milk 1 Litre",
+    "brand": "Engro Foods",
+    "ingredients": "fresh, milk, vitamin, a, vitamin, d3, stabilizer, (e407)",
+    "macros": {
+      "calories": 150.0,
+      "protein": 8.0,
+      "carbs": 12.0,
+      "fats": 8.5
+    },
+    "halal_status": "Halal",
+    "allergens": {
+      "contains_dairy": true,
+      "contains_gluten": false,
+      "contains_nuts": false,
+      "contains_soy": false,
+      "contains_eggs": false
+    }
+  },
+  {
+    "name": "National Tomato Ketchup",
+    "brand": "National Foods",
+    "ingredients": "tomato, paste, sugar, vinegar, salt, starch, preservative, (e211)",
+    "macros": {
+      "calories": 25.2,
+      "protein": 0.1,
+      "carbs": 6.2,
+      "fats": 0.0
+    },
+    "halal_status": "Halal",
+    "allergens": {
+      "contains_dairy": false,
+      "contains_gluten": false,
+      "contains_nuts": false,
+      "contains_soy": false,
+      "contains_eggs": false
+    }
+  },
+  {
+    "name": "Imported Choco-Wafer Cookies",
+    "brand": "GlobalDelight",
+    "ingredients": "wheat, flour, sugar, palm, oil, cocoa, powder, pork, gelatin, emulsifier, (soy, lecithin)",
+    "macros": {
+      "calories": 210.0,
+      "protein": 3.0,
+      "carbs": 25.0,
+      "fats": 11.0
+    },
+    "halal_status": "Haram",
+    "allergens": {
+      "contains_dairy": false,
+      "contains_gluten": true,
+      "contains_nuts": false,
+      "contains_soy": true,
+      "contains_eggs": false
+    }
+  }
+]

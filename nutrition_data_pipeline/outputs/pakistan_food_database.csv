@@ -1,0 +1,5 @@
+name,brand,ingredients,calories,protein,carbs,fats,halal_status,contains_dairy,contains_gluten,contains_nuts,contains_soy,contains_eggs
+Shan Biryani Masala 50g,Shan Foods,"salt, red chili, cumin, turmeric, coriander, garlic, ginger, citric, acid, silicon, dioxide",120.0,2.0,15.0,1.5,Halal,False,False,False,False,False
+Olper's Full Cream Milk 1 Litre,Engro Foods,"fresh, milk, vitamin, a, vitamin, d3, stabilizer, (e407)",150.0,8.0,12.0,8.5,Halal,True,False,False,False,False
+National Tomato Ketchup,National Foods,"tomato, paste, sugar, vinegar, salt, starch, preservative, (e211)",25.2,0.1,6.2,0.0,Halal,False,False,False,False,False
+Imported Choco-Wafer Cookies,GlobalDelight,"wheat, flour, sugar, palm, oil, cocoa, powder, pork, gelatin, emulsifier, (soy, lecithin)",210.0,3.0,25.0,11.0,Haram,False,True,False,True,False

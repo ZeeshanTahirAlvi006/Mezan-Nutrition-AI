@@ -39,6 +39,14 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  pantry: {
+    type: [String],
+    default: []
+  },
+  targetCalories: {
+    type: Number,
+    default: 2000
+  },
 }, { timestamps: true });
 
 const User = mongoose.model('User', userSchema);

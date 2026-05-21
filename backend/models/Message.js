@@ -16,6 +16,7 @@ const messageSchema = new mongoose.Schema({
     required: false,
   },
   toolCalls: [{
+    _id: false, // Prevent mongoose from creating an ObjectId that overrides the AI's 'id' field
     id: String,
     type: { type: String, default: 'function' },
     function: {
