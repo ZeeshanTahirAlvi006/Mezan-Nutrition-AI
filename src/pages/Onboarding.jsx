@@ -13,7 +13,9 @@ const Onboarding = () => {
     weight: '',
     height: '',
     healthGoals: 'Maintenance',
-    restrictions: []
+    restrictions: [],
+    securityQuestion: '',
+    securityAnswer: ''
   });
 
   const handleNext = () => setStep(s => s + 1);
@@ -44,17 +46,17 @@ const Onboarding = () => {
       {/* Top Brand & Progress Indicator */}
       <div className="w-full max-w-xl mb-8">
         <div className="flex justify-between items-center mb-4 px-2">
-          <span className="text-primary font-bold text-xs uppercase tracking-widest">Step {step} of 3</span>
+          <span className="text-primary font-bold text-xs uppercase tracking-widest">Step {step} of 4</span>
           <div className="flex items-center gap-1.5">
             <span className="material-symbols-outlined text-primary text-[20px]">spa</span>
             <span className="font-headline font-bold text-lg text-primary">Mezan</span>
           </div>
         </div>
         <div className="flex justify-between gap-2.5">
-          {[1, 2, 3].map(i => (
+          {[1, 2, 3, 4].map(i => (
             <div 
               key={i} 
-              className={`h-2 rounded-full w-1/3 transition-all duration-500 ${
+              className={`h-2 rounded-full w-1/4 transition-all duration-500 ${
                 step >= i ? 'bg-primary shadow-[0_2px_4px_rgba(58,105,55,0.2)]' : 'bg-outline-variant/30'
               }`} 
             />
@@ -243,8 +245,81 @@ const Onboarding = () => {
                   <ChevronLeft className="w-5 h-5" /> Back
                 </button>
                 <button 
+                  onClick={handleNext} 
+                  className="flex-[2] kcal-btn-primary flex items-center justify-center gap-2 group cursor-pointer"
+                >
+                  Next <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 4 && (
+            <motion.div
+              key="step4"
+              initial={{ x: 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -20, opacity: 0 }}
+              transition={{ duration: 0.35 }}
+              className="space-y-6"
+            >
+              <div className="flex items-center gap-4 mb-6">
+                <div className="bg-primary-container/20 p-3.5 rounded-2xl text-primary flex items-center justify-center">
+                  <ShieldCheck className="w-6 h-6"/>
+                </div>
+                <div>
+                  <h2 className="text-xl md:text-2xl font-bold text-text-rich-black leading-tight">Security Recovery</h2>
+                  <p className="text-xs md:text-sm text-on-surface-variant">Set a custom security question to recover your password without email.</p>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2 ml-1">
+                    Custom Security Question
+                  </label>
+                  <input 
+                    type="text" 
+                    className="kcal-input bg-white w-full"
+                    value={formData.securityQuestion} 
+                    onChange={e => setFormData({...formData, securityQuestion: e.target.value})} 
+                    placeholder="e.g., What was the brand of my first phone?"
+                    required
+                  />
+                  <p className="text-[10px] text-on-surface-variant mt-1.5 ml-1">
+                    💡 Tip: Choose a question that has a memorable, unique answer that you won't forget.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2 ml-1">
+                    Your Answer
+                  </label>
+                  <input 
+                    type="text" 
+                    className="kcal-input bg-white w-full font-medium"
+                    value={formData.securityAnswer} 
+                    onChange={e => setFormData({...formData, securityAnswer: e.target.value})} 
+                    placeholder="e.g., Nokia"
+                    required
+                  />
+                  <p className="text-[10px] text-on-surface-variant mt-1.5 ml-1">
+                    🔒 Stored in hashed and salted form. Answers are case-insensitive.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 mt-8">
+                <button 
+                  onClick={handlePrev} 
+                  className="flex-1 border border-primary/30 text-primary font-bold py-4 rounded-xl flex items-center justify-center gap-2 text-sm transition-all hover:bg-primary/5 cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5" /> Back
+                </button>
+                <button 
                   onClick={handleSubmit} 
-                  className="flex-[2] kcal-btn-primary flex items-center justify-center cursor-pointer shadow-lg"
+                  disabled={!formData.securityQuestion.trim() || !formData.securityAnswer.trim()}
+                  className="flex-[2] kcal-btn-primary flex items-center justify-center cursor-pointer shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Finalize Profile
                 </button>

@@ -37,3 +37,9 @@ lerna-debug.log*
 
 # Testing
 coverage/
+
+# Firebase / Service Account Secrets
+backend/config/serviceAccountKey.json
+serviceAccountKey.json
+.env
+backend/.env

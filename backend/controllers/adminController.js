@@ -1,102 +1,96 @@
-import User from '../models/User.js';
-import FoodItem from '../models/FoodItem.js';
-import DailyLog from '../models/DailyLog.js';
-import CheckIn from '../models/CheckIn.js';
-import ChatSession from '../models/ChatSession.js';
-import Message from '../models/Message.js';
-import MealPlan from '../models/MealPlan.js';
+import { db } from '../config/firebase.js';
 import {
   escapeRegex,
   paginate,
   parseFoodRows,
   validateFoodPayload,
 } from '../utils/csvFoodParser.js';
+import { Pinecone } from '@pinecone-database/pinecone';
+import pdfParse from '../scripts/pdfParser.cjs';
+import crypto from 'crypto';
 
-// Accounts without `role` (pre-migration) are regular users, not admins
-const nonAdminFilter = { role: { $ne: 'admin' } };
-
+// Helpers
 const startOfToday = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
 };
-
 const endOfToday = () => {
   const d = new Date();
   d.setHours(23, 59, 59, 999);
   return d;
 };
 
-const countAdmins = () => User.countDocuments({ role: 'admin', isDisabled: { $ne: true } });
-
-const cascadeDeleteUser = async (userId) => {
-  const sessions = await ChatSession.find({ user: userId }).select('_id');
-  const sessionIds = sessions.map((s) => s._id);
-
-  await Message.deleteMany({ session: { $in: sessionIds } });
-  await ChatSession.deleteMany({ user: userId });
-  await DailyLog.deleteMany({ userId });
-  await CheckIn.deleteMany({ userId });
-  await MealPlan.deleteMany({ user: userId });
-  await User.findByIdAndDelete(userId);
-};
-
 // GET /api/admin/stats
 const getStats = async (req, res) => {
   try {
-    const todayStart = startOfToday();
-    const todayEnd = endOfToday();
+    const todayStart = startOfToday().toISOString();
+    const todayEnd = endOfToday().toISOString();
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString();
 
     const [
-      totalUsers,
-      newUsers7d,
-      foodItems,
-      dailyLogsToday,
-      checkInsToday,
-      chatSessions,
-      messages,
-      mealPlans,
-      activeUserIds,
+      usersSnap,
+      foodsSnap,
+      logsSnap,
+      checkInsSnap,
+      sessionsSnap,
+      mealPlansSnap
     ] = await Promise.all([
-      User.countDocuments(nonAdminFilter),
-      User.countDocuments({ ...nonAdminFilter, createdAt: { $gte: sevenDaysAgo } }),
-      FoodItem.countDocuments(),
-      DailyLog.countDocuments({ date: { $gte: todayStart, $lte: todayEnd } }),
-      CheckIn.countDocuments({ date: { $gte: todayStart, $lte: todayEnd } }),
-      ChatSession.countDocuments(),
-      Message.countDocuments(),
-      MealPlan.countDocuments(),
-      DailyLog.distinct('userId', { date: { $gte: sevenDaysAgo } }),
+      db.collection('users').get(),
+      db.collection('foods').get(),
+      db.collection('dailyLogs').get(),
+      db.collection('checkIns').get(),
+      db.collection('chatSessions').get(),
+      db.collection('mealPlans').get()
     ]);
 
-    const registrations = await User.aggregate([
-      { $match: { ...nonAdminFilter, createdAt: { $gte: thirtyDaysAgo } } },
-      {
-        $group: {
-          _id: {
-            $dateToString: { format: '%Y-%m-%d', date: '$createdAt' },
-          },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { _id: 1 } },
-    ]);
+    const users = usersSnap.docs.map(d => d.data());
+    const nonAdminUsers = users.filter(u => u.role !== 'admin');
+    
+    const newUsers7d = nonAdminUsers.filter(u => new Date(u.createdAt) >= sevenDaysAgo).length;
+
+    const logs = logsSnap.docs.map(d => d.data());
+    const dailyLogsToday = logs.filter(l => l.date >= todayStart && l.date <= todayEnd).length;
+    
+    const activeUserIds = new Set(logs.filter(l => l.date >= sevenDaysAgoStr).map(l => l.userId));
+
+    const checkIns = checkInsSnap.docs.map(d => d.data());
+    const checkInsToday = checkIns.filter(c => c.date >= todayStart && c.date <= todayEnd).length;
+
+    const sessions = sessionsSnap.docs.map(d => d.data());
+    let messagesCount = 0;
+    sessions.forEach(s => {
+      messagesCount += (s.messages || []).length;
+    });
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const registrationsByDayObj = {};
+    nonAdminUsers.forEach(u => {
+      if (new Date(u.createdAt) >= thirtyDaysAgo) {
+        const d = new Date(u.createdAt).toISOString().split('T')[0];
+        registrationsByDayObj[d] = (registrationsByDayObj[d] || 0) + 1;
+      }
+    });
+
+    const registrationsByDay = Object.keys(registrationsByDayObj).sort().map(date => ({
+      date, count: registrationsByDayObj[date]
+    }));
 
     res.json({
-      totalUsers,
+      totalUsers: nonAdminUsers.length,
       newUsers7d,
-      activeUsers7d: activeUserIds.length,
-      foodItems,
+      activeUsers7d: activeUserIds.size,
+      foodItems: foodsSnap.size,
       dailyLogsToday,
       checkInsToday,
-      chatSessions,
-      messages,
-      mealPlans,
-      registrationsByDay: registrations.map((r) => ({ date: r._id, count: r.count })),
+      chatSessions: sessionsSnap.size,
+      messages: messagesCount,
+      mealPlans: mealPlansSnap.size,
+      registrationsByDay
     });
   } catch (error) {
     console.error('[Admin] getStats:', error);
@@ -108,23 +102,21 @@ const getStats = async (req, res) => {
 const listUsers = async (req, res) => {
   try {
     const { page, limit, skip } = paginate(req.query.page, req.query.limit);
-    const search = req.query.search ? String(req.query.search).trim() : '';
+    const search = req.query.search ? String(req.query.search).trim().toLowerCase() : '';
 
-    const filter = { ...nonAdminFilter };
+    const snap = await db.collection('users').get();
+    let users = snap.docs.map(doc => ({ _id: doc.id, ...doc.data() })).filter(u => u.role !== 'admin');
+
     if (search) {
-      filter.email = { $regex: escapeRegex(search), $options: 'i' };
+      users = users.filter(u => (u.email || '').toLowerCase().includes(search));
     }
 
-    const [users, total] = await Promise.all([
-      User.find(filter)
-        .select('-password')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      User.countDocuments(filter),
-    ]);
+    users.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    const total = users.length;
+    const paginated = users.slice(skip, skip + limit);
 
-    res.json({ users, total, page, limit, pages: Math.ceil(total / limit) });
+    res.json({ users: paginated, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (error) {
     console.error('[Admin] listUsers:', error);
     res.status(500).json({ message: 'Failed to list users' });
@@ -134,24 +126,25 @@ const listUsers = async (req, res) => {
 // GET /api/admin/users/:id
 const getUser = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
-    if (!user || user.role === 'admin') {
+    const doc = await db.collection('users').doc(req.params.id).get();
+    if (!doc.exists || doc.data().role === 'admin') {
       return res.status(404).json({ message: 'User not found' });
     }
+    const user = { _id: doc.id, ...doc.data() };
 
-    const [logCount, sessionCount, mealPlan] = await Promise.all([
-      DailyLog.countDocuments({ userId: user._id }),
-      ChatSession.countDocuments({ user: user._id }),
-      MealPlan.findOne({ user: user._id }).select('_id updatedAt'),
+    const [logsSnap, sessionsSnap, planSnap] = await Promise.all([
+      db.collection('dailyLogs').where('userId', '==', user._id).get(),
+      db.collection('chatSessions').where('userId', '==', user._id).get(),
+      db.collection('mealPlans').doc(user._id).get()
     ]);
 
     res.json({
       user,
       summary: {
-        logCount,
-        sessionCount,
-        hasMealPlan: !!mealPlan,
-        mealPlanUpdatedAt: mealPlan?.updatedAt,
+        logCount: logsSnap.size,
+        sessionCount: sessionsSnap.size,
+        hasMealPlan: planSnap.exists,
+        mealPlanUpdatedAt: planSnap.exists ? planSnap.data().updatedAt : null,
       },
     });
   } catch (error) {
@@ -163,62 +156,40 @@ const getUser = async (req, res) => {
 // PATCH /api/admin/users/:id
 const updateUser = async (req, res) => {
   try {
-    const target = await User.findById(req.params.id);
-    if (!target || target.role === 'admin') {
+    const userRef = db.collection('users').doc(req.params.id);
+    const doc = await userRef.get();
+    
+    if (!doc.exists || doc.data().role === 'admin') {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    const updates = {};
     if (req.body.isDisabled !== undefined) {
-      if (req.body.isDisabled === true && target._id.equals(req.user._id)) {
+      if (req.body.isDisabled === true && req.params.id === req.user.uid) {
         return res.status(400).json({ message: 'Cannot disable your own account' });
       }
-      target.isDisabled = !!req.body.isDisabled;
+      updates.isDisabled = !!req.body.isDisabled;
     }
 
-    if (req.body.age !== undefined) {
-      const age = Number(req.body.age);
-      if (isNaN(age) || age < 1 || age > 120 || !Number.isInteger(age)) {
-        return res.status(400).json({ message: 'Age must be an integer between 1 and 120' });
+    const numericFields = ['age', 'weight', 'height'];
+    numericFields.forEach(f => {
+      if (req.body[f] !== undefined) {
+        updates[f] = Number(req.body[f]);
       }
-      target.age = age;
-    }
+    });
 
-    if (req.body.weight !== undefined) {
-      const weight = Number(req.body.weight);
-      if (isNaN(weight) || weight <= 0 || weight > 500) {
-        return res.status(400).json({ message: 'Weight must be a positive number up to 500' });
-      }
-      target.weight = weight;
-    }
-
-    if (req.body.height !== undefined) {
-      const height = Number(req.body.height);
-      if (isNaN(height) || height <= 0 || height > 300) {
-        return res.status(400).json({ message: 'Height must be a positive number up to 300' });
-      }
-      target.height = height;
-    }
-
-    if (req.body.healthGoals !== undefined) {
-      target.healthGoals = String(req.body.healthGoals).trim() || target.healthGoals;
-    }
-
+    if (req.body.healthGoals !== undefined) updates.healthGoals = String(req.body.healthGoals).trim();
+    if (req.body.location !== undefined) updates.location = String(req.body.location).trim();
     if (req.body.restrictions !== undefined) {
-      if (!Array.isArray(req.body.restrictions)) {
-        return res.status(400).json({ message: 'Restrictions must be an array' });
-      }
-      target.restrictions = req.body.restrictions.map(r => String(r).trim());
+      updates.restrictions = Array.isArray(req.body.restrictions) ? req.body.restrictions.map(r => String(r).trim()) : [];
     }
 
-    if (req.body.location !== undefined) {
-      target.location = String(req.body.location).trim();
-    }
-
-    await target.save();
-    const user = await User.findById(target._id).select('-password');
-    res.json(user);
+    updates.updatedAt = new Date();
+    await userRef.update(updates);
+    
+    const updatedDoc = await userRef.get();
+    res.json({ _id: updatedDoc.id, ...updatedDoc.data() });
   } catch (error) {
-    console.error('[Admin] updateUser:', error);
     res.status(500).json({ message: 'Failed to update user' });
   }
 };
@@ -226,27 +197,40 @@ const updateUser = async (req, res) => {
 // DELETE /api/admin/users/:id
 const deleteUser = async (req, res) => {
   try {
-    const target = await User.findById(req.params.id);
-    if (!target) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    if (target.role === 'admin') {
-      const admins = await countAdmins();
-      if (admins <= 1) {
-        return res.status(400).json({ message: 'Cannot delete the last admin account' });
-      }
-    }
-
-    if (target._id.equals(req.user._id)) {
+    if (req.params.id === req.user.uid) {
       return res.status(400).json({ message: 'Cannot delete your own account' });
     }
 
-    console.log(`[Admin] User deleted by ${req.user.email}: ${target.email}`);
-    await cascadeDeleteUser(target._id);
+    const userRef = db.collection('users').doc(req.params.id);
+    const doc = await userRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (doc.data().role === 'admin') {
+      return res.status(400).json({ message: 'Cannot delete admin accounts from this route' });
+    }
+
+    // Cascade delete in Firestore is manual
+    const batch = db.batch();
+    
+    const [sessions, logs, checkIns] = await Promise.all([
+      db.collection('chatSessions').where('userId', '==', req.params.id).get(),
+      db.collection('dailyLogs').where('userId', '==', req.params.id).get(),
+      db.collection('checkIns').where('userId', '==', req.params.id).get()
+    ]);
+
+    sessions.forEach(doc => batch.delete(doc.ref));
+    logs.forEach(doc => batch.delete(doc.ref));
+    checkIns.forEach(doc => batch.delete(doc.ref));
+    
+    batch.delete(db.collection('mealPlans').doc(req.params.id));
+    batch.delete(userRef);
+
+    await batch.commit();
+
     res.json({ success: true });
   } catch (error) {
-    console.error('[Admin] deleteUser:', error);
     res.status(500).json({ message: 'Failed to delete user' });
   }
 };
@@ -255,20 +239,16 @@ const deleteUser = async (req, res) => {
 const getUserLogs = async (req, res) => {
   try {
     const { page, limit, skip } = paginate(req.query.page, req.query.limit);
-    const filter = { userId: req.params.id };
+    const snap = await db.collection('dailyLogs').where('userId', '==', req.params.id).get();
+    
+    let logs = snap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+    logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    const total = logs.length;
+    const paginated = logs.slice(skip, skip + limit);
 
-    const [logs, total] = await Promise.all([
-      DailyLog.find(filter)
-        .populate('foodItems.foodId', 'name calories protein carbs fats')
-        .sort({ date: -1 })
-        .skip(skip)
-        .limit(limit),
-      DailyLog.countDocuments(filter),
-    ]);
-
-    res.json({ logs, total, page, limit, pages: Math.ceil(total / limit) });
+    res.json({ logs: paginated, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (error) {
-    console.error('[Admin] getUserLogs:', error);
     res.status(500).json({ message: 'Failed to fetch logs' });
   }
 };
@@ -277,16 +257,16 @@ const getUserLogs = async (req, res) => {
 const getUserCheckins = async (req, res) => {
   try {
     const { page, limit, skip } = paginate(req.query.page, req.query.limit);
-    const filter = { userId: req.params.id };
+    const snap = await db.collection('checkIns').where('userId', '==', req.params.id).get();
+    
+    let checkins = snap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+    checkins.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    const total = checkins.length;
+    const paginated = checkins.slice(skip, skip + limit);
 
-    const [checkins, total] = await Promise.all([
-      CheckIn.find(filter).sort({ date: -1 }).skip(skip).limit(limit),
-      CheckIn.countDocuments(filter),
-    ]);
-
-    res.json({ checkins, total, page, limit, pages: Math.ceil(total / limit) });
+    res.json({ checkins: paginated, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (error) {
-    console.error('[Admin] getUserCheckins:', error);
     res.status(500).json({ message: 'Failed to fetch check-ins' });
   }
 };
@@ -295,27 +275,31 @@ const getUserCheckins = async (req, res) => {
 const listFood = async (req, res) => {
   try {
     const { page, limit, skip } = paginate(req.query.page, req.query.limit);
-    const query = {};
+    
+    let queryRef = db.collection('foods');
+    if (req.query.country) {
+      queryRef = queryRef.where('country', '==', String(req.query.country).trim());
+    }
+
+    const snap = await queryRef.get();
+    let foods = snap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
 
     if (req.query.q) {
-      const safeQ = String(req.query.q).trim();
-      const keywords = safeQ.split(/\s+/);
-      query.$and = keywords.map((word) => ({
-        name: { $regex: escapeRegex(word), $options: 'i' },
-      }));
-    }
-    if (req.query.country) {
-      query.country = String(req.query.country).trim();
+      const search = String(req.query.q).trim().toLowerCase();
+      const keywords = search.split(/\s+/);
+      foods = foods.filter(f => {
+        const name = (f.name || '').toLowerCase();
+        return keywords.every(kw => name.includes(kw));
+      });
     }
 
-    const [foods, total] = await Promise.all([
-      FoodItem.find(query).sort({ name: 1 }).skip(skip).limit(limit),
-      FoodItem.countDocuments(query),
-    ]);
+    foods.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    
+    const total = foods.length;
+    const paginated = foods.slice(skip, skip + limit);
 
-    res.json({ foods, total, page, limit, pages: Math.ceil(total / limit) });
+    res.json({ foods: paginated, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (error) {
-    console.error('[Admin] listFood:', error);
     res.status(500).json({ message: 'Failed to list food items' });
   }
 };
@@ -324,11 +308,9 @@ const listFood = async (req, res) => {
 const createFood = async (req, res) => {
   try {
     const errors = validateFoodPayload(req.body);
-    if (errors.length) {
-      return res.status(400).json({ message: errors.join('; ') });
-    }
+    if (errors.length) return res.status(400).json({ message: errors.join('; ') });
 
-    const food = await FoodItem.create({
+    const newFood = {
       name: String(req.body.name).trim(),
       country: req.body.country || 'Global',
       calories: Number(req.body.calories),
@@ -338,11 +320,13 @@ const createFood = async (req, res) => {
       fiber: Number(req.body.fiber) || 0,
       sugar: Number(req.body.sugar) || 0,
       sodium: Number(req.body.sodium) || 0,
-    });
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
 
-    res.status(201).json(food);
+    const docRef = await db.collection('foods').add(newFood);
+    res.status(201).json({ _id: docRef.id, ...newFood });
   } catch (error) {
-    console.error('[Admin] createFood:', error);
     res.status(500).json({ message: 'Failed to create food item' });
   }
 };
@@ -351,28 +335,28 @@ const createFood = async (req, res) => {
 const updateFood = async (req, res) => {
   try {
     const errors = validateFoodPayload(req.body, true);
-    if (errors.length) {
-      return res.status(400).json({ message: errors.join('; ') });
-    }
+    if (errors.length) return res.status(400).json({ message: errors.join('; ') });
 
-    const food = await FoodItem.findById(req.params.id);
-    if (!food) {
-      return res.status(404).json({ message: 'Food item not found' });
-    }
+    const foodRef = db.collection('foods').doc(req.params.id);
+    const doc = await foodRef.get();
+    if (!doc.exists) return res.status(404).json({ message: 'Food item not found' });
 
+    const updates = {};
     const fields = ['name', 'country', 'calories', 'protein', 'carbs', 'fats', 'fiber', 'sugar', 'sodium'];
-    for (const field of fields) {
+    fields.forEach(field => {
       if (req.body[field] !== undefined) {
-        food[field] = field === 'name' || field === 'country'
+        updates[field] = field === 'name' || field === 'country'
           ? String(req.body[field]).trim()
           : Number(req.body[field]) || 0;
       }
-    }
+    });
 
-    await food.save();
-    res.json(food);
+    updates.updatedAt = new Date();
+    await foodRef.update(updates);
+    
+    const updated = await foodRef.get();
+    res.json({ _id: updated.id, ...updated.data() });
   } catch (error) {
-    console.error('[Admin] updateFood:', error);
     res.status(500).json({ message: 'Failed to update food item' });
   }
 };
@@ -380,18 +364,14 @@ const updateFood = async (req, res) => {
 // DELETE /api/admin/food/:id
 const deleteFood = async (req, res) => {
   try {
-    const food = await FoodItem.findByIdAndDelete(req.params.id);
-    if (!food) {
-      return res.status(404).json({ message: 'Food item not found' });
-    }
+    await db.collection('foods').doc(req.params.id).delete();
     res.json({ success: true });
   } catch (error) {
-    console.error('[Admin] deleteFood:', error);
     res.status(500).json({ message: 'Failed to delete food item' });
   }
 };
 
-// POST /api/admin/food/import — req.parsedCsvRows set by multer middleware
+// POST /api/admin/food/import
 const importFoodCsv = async (req, res) => {
   try {
     if (!req.parsedCsvRows || req.parsedCsvRows.length === 0) {
@@ -400,28 +380,18 @@ const importFoodCsv = async (req, res) => {
 
     const { parsed, errors } = parseFoodRows(req.parsedCsvRows);
     let imported = 0;
-    let skipped = 0;
-
-    const CHUNK = 500;
-    for (let i = 0; i < parsed.length; i += CHUNK) {
-      const chunk = parsed.slice(i, i + CHUNK);
-      try {
-        const result = await FoodItem.insertMany(chunk, { ordered: false });
-        imported += result.length;
-      } catch (e) {
-        if (e.writeErrors) {
-          imported += chunk.length - e.writeErrors.length;
-          skipped += e.writeErrors.length;
-        } else {
-          skipped += chunk.length;
-        }
-      }
+    
+    const batch = db.batch();
+    for (const food of parsed) {
+      const docRef = db.collection('foods').doc();
+      batch.set(docRef, { ...food, createdAt: new Date(), updatedAt: new Date() });
+      imported++;
     }
+    
+    await batch.commit();
 
-    console.log(`[Admin] CSV import by ${req.user.email}: imported=${imported}, skipped=${skipped}`);
-    res.json({ imported, skipped, errors: errors.slice(0, 50) });
+    res.json({ imported, skipped: req.parsedCsvRows.length - imported, errors: errors.slice(0, 50) });
   } catch (error) {
-    console.error('[Admin] importFoodCsv:', error);
     res.status(500).json({ message: 'Failed to import CSV' });
   }
 };
@@ -430,23 +400,21 @@ const importFoodCsv = async (req, res) => {
 const listChatSessions = async (req, res) => {
   try {
     const { page, limit, skip } = paginate(req.query.page, req.query.limit);
-    const filter = {};
+    
+    let queryRef = db.collection('chatSessions');
     if (req.query.userId) {
-      filter.user = req.query.userId;
+      queryRef = queryRef.where('userId', '==', req.query.userId);
     }
 
-    const [sessions, total] = await Promise.all([
-      ChatSession.find(filter)
-        .populate('user', 'email')
-        .sort({ updatedAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      ChatSession.countDocuments(filter),
-    ]);
+    const snap = await queryRef.get();
+    let sessions = snap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+    
+    sessions.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const total = sessions.length;
+    const paginated = sessions.slice(skip, skip + limit);
 
-    res.json({ sessions, total, page, limit, pages: Math.ceil(total / limit) });
+    res.json({ sessions: paginated, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (error) {
-    console.error('[Admin] listChatSessions:', error);
     res.status(500).json({ message: 'Failed to list chat sessions' });
   }
 };
@@ -454,15 +422,12 @@ const listChatSessions = async (req, res) => {
 // GET /api/admin/chat/sessions/:sessionId/messages
 const getChatMessages = async (req, res) => {
   try {
-    const session = await ChatSession.findById(req.params.sessionId).populate('user', 'email');
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found' });
-    }
-
-    const messages = await Message.find({ session: session._id }).sort('createdAt');
-    res.json({ session, messages });
+    const doc = await db.collection('chatSessions').doc(req.params.sessionId).get();
+    if (!doc.exists) return res.status(404).json({ message: 'Session not found' });
+    
+    const session = { _id: doc.id, ...doc.data() };
+    res.json({ session, messages: session.messages || [] });
   } catch (error) {
-    console.error('[Admin] getChatMessages:', error);
     res.status(500).json({ message: 'Failed to fetch messages' });
   }
 };
@@ -470,19 +435,13 @@ const getChatMessages = async (req, res) => {
 // PATCH /api/admin/chat/sessions/:sessionId
 const updateChatSession = async (req, res) => {
   try {
-    const session = await ChatSession.findById(req.params.sessionId);
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found' });
-    }
-
+    const sessionRef = db.collection('chatSessions').doc(req.params.sessionId);
     if (req.body.isActive !== undefined) {
-      session.isActive = !!req.body.isActive;
+      await sessionRef.update({ isActive: !!req.body.isActive, updatedAt: new Date() });
     }
-
-    await session.save();
-    res.json(session);
+    const doc = await sessionRef.get();
+    res.json({ _id: doc.id, ...doc.data() });
   } catch (error) {
-    console.error('[Admin] updateChatSession:', error);
     res.status(500).json({ message: 'Failed to update session' });
   }
 };
@@ -490,31 +449,33 @@ const updateChatSession = async (req, res) => {
 // DELETE /api/admin/chat/sessions/:sessionId
 const deleteChatSession = async (req, res) => {
   try {
-    const session = await ChatSession.findById(req.params.sessionId);
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found' });
-    }
-
-    console.log(`[Admin] Session deleted by ${req.user.email}: ${session._id}`);
-    await Message.deleteMany({ session: session._id });
-    await session.deleteOne();
+    await db.collection('chatSessions').doc(req.params.sessionId).delete();
     res.json({ success: true });
   } catch (error) {
-    console.error('[Admin] deleteChatSession:', error);
     res.status(500).json({ message: 'Failed to delete session' });
   }
 };
 
 // DELETE /api/admin/chat/messages/:messageId
 const deleteChatMessage = async (req, res) => {
+  // Complex in Firestore due to embedded array. We have to find the session first.
   try {
-    const message = await Message.findByIdAndDelete(req.params.messageId);
-    if (!message) {
-      return res.status(404).json({ message: 'Message not found' });
+    const sessionsSnap = await db.collection('chatSessions').get();
+    let found = false;
+    
+    for (const doc of sessionsSnap.docs) {
+      const data = doc.data();
+      const newMessages = (data.messages || []).filter(m => m._id !== req.params.messageId);
+      if (newMessages.length !== (data.messages || []).length) {
+        await doc.ref.update({ messages: newMessages });
+        found = true;
+        break;
+      }
     }
+
+    if (!found) return res.status(404).json({ message: 'Message not found' });
     res.json({ success: true });
   } catch (error) {
-    console.error('[Admin] deleteChatMessage:', error);
     res.status(500).json({ message: 'Failed to delete message' });
   }
 };
@@ -523,34 +484,24 @@ const deleteChatMessage = async (req, res) => {
 const listMealPlans = async (req, res) => {
   try {
     const { page, limit, skip } = paginate(req.query.page, req.query.limit);
-    const filter = {};
+    
+    const snap = await db.collection('mealPlans').get();
+    let plans = snap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+    
     if (req.query.userId) {
-      filter.user = req.query.userId;
+      plans = plans.filter(p => p.userId === req.query.userId);
     }
 
-    const [plans, total] = await Promise.all([
-      MealPlan.find(filter)
-        .populate('user', 'email')
-        .sort({ updatedAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .select('-days.meals'),
-      MealPlan.countDocuments(filter),
-    ]);
+    plans.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    
+    const total = plans.length;
+    const paginated = plans.slice(skip, skip + limit).map(p => ({
+      ...p,
+      dayCount: (p.days || []).length
+    }));
 
-    const plansWithMeta = await Promise.all(
-      plans.map(async (p) => {
-        const full = await MealPlan.findById(p._id).select('days');
-        return {
-          ...p.toObject(),
-          dayCount: full?.days?.length || 0,
-        };
-      })
-    );
-
-    res.json({ plans: plansWithMeta, total, page, limit, pages: Math.ceil(total / limit) });
+    res.json({ plans: paginated, total, page, limit, pages: Math.ceil(total / limit) });
   } catch (error) {
-    console.error('[Admin] listMealPlans:', error);
     res.status(500).json({ message: 'Failed to list meal plans' });
   }
 };
@@ -558,13 +509,10 @@ const listMealPlans = async (req, res) => {
 // GET /api/admin/meal-plans/:id
 const getMealPlan = async (req, res) => {
   try {
-    const plan = await MealPlan.findById(req.params.id).populate('user', 'email');
-    if (!plan) {
-      return res.status(404).json({ message: 'Meal plan not found' });
-    }
-    res.json(plan);
+    const doc = await db.collection('mealPlans').doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ message: 'Meal plan not found' });
+    res.json({ _id: doc.id, ...doc.data() });
   } catch (error) {
-    console.error('[Admin] getMealPlan:', error);
     res.status(500).json({ message: 'Failed to fetch meal plan' });
   }
 };
@@ -572,14 +520,87 @@ const getMealPlan = async (req, res) => {
 // DELETE /api/admin/meal-plans/:id
 const deleteMealPlan = async (req, res) => {
   try {
-    const plan = await MealPlan.findByIdAndDelete(req.params.id);
-    if (!plan) {
-      return res.status(404).json({ message: 'Meal plan not found' });
-    }
+    await db.collection('mealPlans').doc(req.params.id).delete();
     res.json({ success: true });
   } catch (error) {
-    console.error('[Admin] deleteMealPlan:', error);
     res.status(500).json({ message: 'Failed to delete meal plan' });
+  }
+};
+
+// POST /api/admin/knowledge-base/upload
+const uploadPdfKnowledgeBase = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'PDF file is required (field name: file)' });
+    }
+
+    const dataBuffer = req.file.buffer;
+    const fileName = req.file.originalname;
+
+    const data = await pdfParse(dataBuffer);
+    const rawText = data.text;
+    const cleanText = rawText.replace(/\s+/g, ' ').trim();
+
+    if (!cleanText) {
+      return res.status(400).json({ message: 'No extractable text found in the PDF.' });
+    }
+
+    const CHUNK_SIZE = 1000;
+    const OVERLAP = 200;
+    const chunks = [];
+    let startIndex = 0;
+    while (startIndex < cleanText.length) {
+      const endIndex = Math.min(startIndex + CHUNK_SIZE, cleanText.length);
+      chunks.push(cleanText.substring(startIndex, endIndex));
+      startIndex += CHUNK_SIZE - OVERLAP;
+    }
+
+    if (!process.env.PINECONE_API_KEY) {
+      return res.status(500).json({ message: 'Pinecone API key is not configured.' });
+    }
+    const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+    const index = pinecone.Index('nutriguide-kb');
+
+    let vectors = [];
+    let uploaded = 0;
+    const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+    const EMBED_BATCH = 10;
+    for (let i = 0; i < chunks.length; i += EMBED_BATCH) {
+      try {
+        const batchTexts = chunks.slice(i, i + EMBED_BATCH);
+        const embedResponse = await pinecone.inference.embed({
+          model: 'multilingual-e5-large',
+          inputs: batchTexts,
+          parameters: { inputType: 'passage', truncate: 'END' }
+        });
+        const embeddings = embedResponse.data.map(d => d.values);
+
+        for (let j = 0; j < embeddings.length; j++) {
+          vectors.push({
+            id: `vec_${crypto.randomBytes(16).toString('hex')}`,
+            values: embeddings[j],
+            metadata: { source: fileName, text: batchTexts[j] }
+          });
+        }
+
+        if (vectors.length >= 50 || i + EMBED_BATCH >= chunks.length) {
+          if (vectors.length > 0) {
+            await index.upsert({ records: vectors });
+            uploaded += vectors.length;
+            vectors = [];
+          }
+          await delay(500);
+        }
+      } catch (err) {
+        console.error('Error generating/uploading chunk:', err.message);
+      }
+    }
+
+    res.json({ message: 'PDF successfully processed and uploaded to Knowledge Base', chunks: uploaded });
+  } catch (error) {
+    console.error('[Admin] uploadPdfKnowledgeBase:', error);
+    res.status(500).json({ message: 'Failed to process PDF' });
   }
 };
 
@@ -604,4 +625,5 @@ export {
   listMealPlans,
   getMealPlan,
   deleteMealPlan,
+  uploadPdfKnowledgeBase,
 };

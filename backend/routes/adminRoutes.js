@@ -2,6 +2,7 @@ import express from 'express';
 import { protect } from '../middleware/auth.js';
 import { admin } from '../middleware/admin.js';
 import { csvUploadMiddleware, parseCsvBuffer } from '../middleware/csvUpload.js';
+import { pdfUploadMiddleware } from '../middleware/pdfUpload.js';
 import {
   getStats,
   listUsers,
@@ -23,6 +24,7 @@ import {
   listMealPlans,
   getMealPlan,
   deleteMealPlan,
+  uploadPdfKnowledgeBase
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -53,5 +55,7 @@ router.delete('/chat/messages/:messageId', deleteChatMessage);
 router.get('/meal-plans', listMealPlans);
 router.get('/meal-plans/:id', getMealPlan);
 router.delete('/meal-plans/:id', deleteMealPlan);
+
+router.post('/knowledge-base/upload', pdfUploadMiddleware, uploadPdfKnowledgeBase);
 
 export default router;

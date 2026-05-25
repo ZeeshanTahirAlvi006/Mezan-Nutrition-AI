@@ -1,29 +1,21 @@
-import mongoose from 'mongoose';
+import { z } from 'zod';
 
-const foodItemSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-  },
-  country: {
-    type: String,
-    default: 'Global',
-  },
-  calories: {
-    type: Number,
-    required: true,
-  },
-  protein: Number,
-  carbs: Number,
-  fats: Number,
-  fiber: Number,
-  vitamin_A: Number,
-  vitamin_C: Number,
-  sodium: Number,
-  sugar: Number
-}, { timestamps: true });
+export const FoodItemSchema = z.object({
+  name: z.string(),
+  country: z.string().default('Global'),
+  calories: z.number(),
+  protein: z.number().optional(),
+  carbs: z.number().optional(),
+  fats: z.number().optional(),
+  fiber: z.number().optional(),
+  vitamin_A: z.number().optional(),
+  vitamin_C: z.number().optional(),
+  sodium: z.number().optional(),
+  sugar: z.number().optional(),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional()
+});
 
-foodItemSchema.index({ name: 'text' });
-
-const FoodItem = mongoose.model('FoodItem', foodItemSchema);
-export default FoodItem;
+export const validateFoodItem = (data) => {
+  return FoodItemSchema.parse(data);
+};

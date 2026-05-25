@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import client from "../api/client";
-import MacroChart from "../components/MacroChart";
 import FoodSearch from "../components/FoodSearch";
 import DailyCheckIn from "../components/DailyCheckIn";
 import BarcodeScanner from "../components/BarcodeScanner";
@@ -9,6 +8,9 @@ import AchievementToast from "../components/AchievementToast";
 import TopAppBar from "../components/layout/TopAppBar";
 import BottomNav from "../components/layout/BottomNav";
 import PantryManager from "../components/PantryManager";
+import ConcentricRings from "../components/ConcentricRings";
+import WeeklyTrendChart from "../components/WeeklyTrendChart";
+import VoiceInput from "../components/VoiceInput";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
@@ -20,7 +22,23 @@ const Dashboard = () => {
     foodItems: [],
   });
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("Progress updated! Stay healthy.");
   const [activeTab, setActiveTab] = useState("overview");
+  const [voiceLoading, setVoiceLoading] = useState(false);
+
+  const [waterIntake, setWaterIntake] = useState(() => {
+    const saved = localStorage.getItem(`water_${new Date().toDateString()}`);
+    return saved ? Number(saved) : 0;
+  });
+
+  const handleAddWater = (amount) => {
+    const newIntake = waterIntake + amount;
+    setWaterIntake(newIntake);
+    localStorage.setItem(`water_${new Date().toDateString()}`, newIntake);
+    setToastMessage(`Logged ${amount}ml of water! 💧`);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 4000);
+  };
 
   useEffect(() => {
     fetchTodayLog();
@@ -46,10 +64,83 @@ const Dashboard = () => {
       await client.post("/api/logs/daily", payload);
       fetchTodayLog();
       refreshUser();
+      setToastMessage("Progress updated! Stay healthy.");
       setShowToast(true);
       setTimeout(() => setShowToast(false), 4000);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Voice-to-Log: send transcribed speech to AI chat for automatic meal logging
+  const handleVoiceResult = async (text) => {
+    setVoiceLoading(true);
+    try {
+      // 1. Create a temporary chat session
+      const { data: session } = await client.post("/api/chat/session", {});
+      const sessionId = session._id;
+
+      // 2. Send the voice transcript as a user message
+      const { data: aiReply } = await client.post("/api/chat/message", {
+        sessionId,
+        role: "user",
+        content: text,
+      });
+
+      // 3. If the AI wants to call a tool (like log_meal), execute it
+      const toolCalls = aiReply.toolCalls || [];
+      for (const tc of toolCalls) {
+        let toolArgs = {};
+        try {
+          toolArgs =
+            typeof tc.function.arguments === "string"
+              ? JSON.parse(tc.function.arguments)
+              : tc.function.arguments || {};
+        } catch {
+          toolArgs = {};
+        }
+
+        // Execute the tool
+        const { data: toolResult } = await client.post("/api/chat/execute-tool", {
+          sessionId,
+          toolCallId: tc.id,
+          toolName: tc.function.name,
+          toolArgs,
+        });
+
+        // Intercept log_water_intake to sync with local hydration state
+        if (tc.function.name === "log_water_intake" && toolArgs.amount_ml) {
+          handleAddWater(Number(toolArgs.amount_ml));
+        }
+
+        // Send tool result back to AI for final confirmation message
+        await client.post("/api/chat/message", {
+          sessionId,
+          role: "tool",
+          content: toolResult.result || JSON.stringify(toolResult),
+          toolCallId: tc.id,
+          name: tc.function.name,
+        });
+      }
+
+      // 4. Refresh the daily log to show new entries
+      await fetchTodayLog();
+      refreshUser();
+
+      setToastMessage(
+        toolCalls.length > 0
+          ? "🎤 Voice log saved successfully!"
+          : "Message sent to AI Coach."
+      );
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+    } catch (err) {
+      console.error("[Voice Log] Error:", err);
+      setToastMessage("Voice logging failed. Try again.");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+    } finally {
+      setVoiceLoading(false);
     }
   };
 
@@ -58,16 +149,35 @@ const Dashboard = () => {
     navigate("/login");
   };
 
-  // Calculate percentages for progress rings
-  const calorieGoal = user?.targetCalories || 2000;
-  const proteinGoal = user?.proteinGoal || 150;
-  const carbsGoal = user?.carbsGoal || 250;
-  const fatsGoal = user?.fatsGoal || 65;
+  // ── Calculated macro goals (mirrors backend Mifflin-St Jeor) ──
+  const weight = Number(user?.weight) || 0;
+  const height = Number(user?.height) || 0;
+  const age = Number(user?.age) || 0;
+  const gender = (user?.gender || "female").toLowerCase();
 
-  const caloriePct = Math.min(100, Math.round((log.totals.calories / calorieGoal) * 100));
-  const proteinPct = Math.min(100, Math.round((log.totals.protein / proteinGoal) * 100));
-  const carbsPct = Math.min(100, Math.round((log.totals.carbs / carbsGoal) * 100));
-  const fatsPct = Math.min(100, Math.round((log.totals.fats / fatsGoal) * 100));
+  let calorieGoal = user?.targetCalories || 2000;
+  if (weight > 0 && height > 0 && age > 0) {
+    let bmr;
+    if (gender === "male") {
+      bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+    } else {
+      bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+    }
+    const tdee = Math.round(bmr * 1.375);
+    const goal = (user?.healthGoals || "").toLowerCase();
+    if (goal.includes("lose") || goal.includes("cut") || goal.includes("deficit")) {
+      calorieGoal = Math.max(1200, tdee - 400);
+    } else if (goal.includes("gain") || goal.includes("bulk")) {
+      calorieGoal = tdee + 300;
+    } else {
+      calorieGoal = tdee;
+    }
+  }
+
+  const proteinGoal = user?.proteinGoal || Math.round((calorieGoal * 0.25) / 4);
+  const carbsGoal = user?.carbsGoal || Math.round((calorieGoal * 0.45) / 4);
+  const fatsGoal = user?.fatsGoal || Math.round((calorieGoal * 0.30) / 9);
+  const waterGoal = weight > 0 ? Math.round(weight * 35) : 2500;
 
   // Greeting based on time of day
   const getGreeting = () => {
@@ -88,7 +198,7 @@ const Dashboard = () => {
 
           <AchievementToast
             isVisible={showToast}
-            message="Progress updated! Stay healthy."
+            message={toastMessage}
             onClose={() => setShowToast(false)}
           />
 
@@ -107,146 +217,110 @@ const Dashboard = () => {
             </p>
           </motion.section>
 
-          {/* ════ Daily Calories Card ════ */}
+          {/* ════ Concentric Progress Rings Section ════ */}
           <motion.section
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="bg-surface-container-lowest rounded-2xl p-6 card-shadow-soft border border-outline-variant/30"
+            className="bg-surface-container-lowest rounded-3xl p-6 md:p-8 card-shadow-soft border border-outline-variant/25"
           >
-            <div className="flex items-center gap-2 mb-5">
-              <span className="material-symbols-outlined text-primary">local_fire_department</span>
-              <h2 className="font-headline text-lg font-semibold text-on-surface">Daily Calories</h2>
-            </div>
-
-            <div className="flex flex-col md:flex-row items-center gap-8">
-              {/* Circular Progress Ring */}
-              <div className="relative w-44 h-44 md:w-52 md:h-52 flex-shrink-0">
-                <div
-                  className="w-full h-full rounded-full flex items-center justify-center circular-progress"
-                  style={{
-                    '--progress-pct': `${caloriePct}%`,
-                    '--progress-color': '#3a6937',
-                  }}
-                >
-                  <div className="text-center">
-                    <p className="font-headline text-3xl md:text-4xl font-bold text-text-rich-black leading-none">
-                      {Math.round(log.totals.calories)}
-                    </p>
-                    <p className="text-xs text-on-surface-variant font-semibold uppercase tracking-widest mt-1">
-                      of {calorieGoal.toLocaleString()} kcal
-                    </p>
-                  </div>
-                </div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 mb-6 border-b border-outline-variant/15">
+              <div>
+                <h2 className="font-headline text-lg font-bold text-text-rich-black">Daily Progress</h2>
+                <p className="text-xs text-on-surface-variant font-medium">Track your nutrition & hydration goals</p>
               </div>
-
-              {/* Calorie info text */}
-              <div className="flex-1 text-center md:text-left space-y-3">
-                <p className="text-sm md:text-base text-on-surface-variant leading-relaxed">
-                  You've consumed <span className="font-bold text-primary">{Math.round(log.totals.calories)}</span> of your <span className="font-bold text-text-rich-black">{calorieGoal.toLocaleString()}</span> kcal goal today.
-                  {caloriePct < 50 ? " Keep going!" : caloriePct < 90 ? " Great progress!" : " Almost there!"}
-                </p>
-                <div className="flex items-center gap-2 justify-center md:justify-start">
-                  <div className="bg-primary-container/20 px-3 py-1.5 rounded-full flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-primary text-[16px]">trending_up</span>
-                    <span className="text-xs font-bold text-primary">{user?.streakCount ?? 0} Day Streak</span>
-                  </div>
+              <div className="flex items-center gap-4">
+                {/* Streak Badge */}
+                <div className="bg-primary-container/20 px-3.5 py-1.5 rounded-full flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-primary text-[18px]">trending_up</span>
+                  <span className="text-xs font-bold text-primary">{user?.streakCount ?? 0} Day Streak</span>
+                </div>
+                {/* Water Logger Controls */}
+                <div className="flex items-center gap-2 bg-surface-container-low/55 rounded-full p-1 border border-outline-variant/20">
+                  <button
+                    onClick={() => handleAddWater(250)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-[#3B82F6] hover:bg-[#3B82F6]/10 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">water_drop</span>
+                    +250ml
+                  </button>
+                  <button
+                    onClick={() => handleAddWater(500)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-[#1D4ED8] hover:bg-[#1D4ED8]/10 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">local_drink</span>
+                    +500ml
+                  </button>
                 </div>
               </div>
             </div>
-          </motion.section>
 
-          {/* ════ Macro Breakdown Grid ════ */}
-          <motion.section
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.15 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-4"
-          >
-            {/* Protein Card */}
-            <div className="bg-surface-container-lowest rounded-xl p-5 card-shadow-soft border border-outline-variant/30">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-data-protein"></div>
-                  <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Protein</span>
-                </div>
-                <span className="font-headline text-lg font-bold text-text-rich-black">{Math.round(log.totals.protein)}g</span>
-              </div>
-              <div className="w-full h-2.5 bg-surface-container-low rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${proteinPct}%` }}
-                  transition={{ duration: 0.8, delay: 0.3 }}
-                  className="h-full bg-data-protein rounded-full"
-                />
-              </div>
-              <p className="text-[11px] text-on-surface-variant mt-2 font-medium">
-                {Math.round(log.totals.protein)} / {proteinGoal}g
-              </p>
-            </div>
-
-            {/* Carbs Card */}
-            <div className="bg-surface-container-lowest rounded-xl p-5 card-shadow-soft border border-outline-variant/30">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-data-carbs"></div>
-                  <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Carbs</span>
-                </div>
-                <span className="font-headline text-lg font-bold text-text-rich-black">{Math.round(log.totals.carbs)}g</span>
-              </div>
-              <div className="w-full h-2.5 bg-surface-container-low rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${carbsPct}%` }}
-                  transition={{ duration: 0.8, delay: 0.4 }}
-                  className="h-full bg-data-carbs rounded-full"
-                />
-              </div>
-              <p className="text-[11px] text-on-surface-variant mt-2 font-medium">
-                {Math.round(log.totals.carbs)} / {carbsGoal}g
-              </p>
-            </div>
-
-            {/* Fats Card */}
-            <div className="bg-surface-container-lowest rounded-xl p-5 card-shadow-soft border border-outline-variant/30">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-data-fats"></div>
-                  <span className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Fats</span>
-                </div>
-                <span className="font-headline text-lg font-bold text-text-rich-black">{Math.round(log.totals.fats)}g</span>
-              </div>
-              <div className="w-full h-2.5 bg-surface-container-low rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${fatsPct}%` }}
-                  transition={{ duration: 0.8, delay: 0.5 }}
-                  className="h-full bg-data-fats rounded-full"
-                />
-              </div>
-              <p className="text-[11px] text-on-surface-variant mt-2 font-medium">
-                {Math.round(log.totals.fats)} / {fatsGoal}g
-              </p>
+            {/* Concentric Rings component rendering Calories, Protein, Carbs, Fats, Water */}
+            <div className="flex justify-center py-2">
+              <ConcentricRings
+                rings={[
+                  {
+                    value: Math.round(log.totals.calories),
+                    max: calorieGoal,
+                    color: "var(--color-primary)",
+                    label: "Calories",
+                    unit: "kcal",
+                  },
+                  {
+                    value: Math.round(log.totals.protein),
+                    max: proteinGoal,
+                    color: "var(--color-data-protein)",
+                    label: "Protein",
+                    unit: "g",
+                  },
+                  {
+                    value: Math.round(log.totals.carbs),
+                    max: carbsGoal,
+                    color: "var(--color-data-carbs)",
+                    label: "Carbs",
+                    unit: "g",
+                  },
+                  {
+                    value: Math.round(log.totals.fats),
+                    max: fatsGoal,
+                    color: "var(--color-data-fats)",
+                    label: "Fats",
+                    unit: "g",
+                  },
+                  {
+                    value: waterIntake,
+                    max: waterGoal,
+                    color: "#60A5FA",
+                    label: "Water",
+                    unit: "ml",
+                  },
+                ]}
+                size={220}
+                gap={6}
+                strokeWidth={11}
+                centerLabel="Remaining"
+                centerValue={(Math.max(0, calorieGoal - Math.round(log.totals.calories))).toLocaleString()}
+                centerUnit="kcal"
+              />
             </div>
           </motion.section>
 
           {/* ════ Tab Switch: Overview / Search / Check-in ════ */}
           <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-[24px] px-[24px]">
             {[
-              { key: "overview", icon: "bar_chart", label: "Overview" },
+              { key: "overview", icon: "insights", label: "Trends" },
               { key: "pantry", icon: "kitchen", label: "My Pantry" },
-              { key: "search", icon: "search", label: "Search Food" },
+              { key: "search", icon: "search", label: "Log Food" },
               { key: "scan", icon: "qr_code_scanner", label: "Barcode" },
               { key: "checkin", icon: "mood", label: "Check-in" },
             ].map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap ${
-                  activeTab === tab.key
+                className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap ${activeTab === tab.key
                     ? "bg-primary text-on-primary shadow-sm"
                     : "bg-surface-container-lowest border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container-low"
-                }`}
+                  }`}
               >
                 <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
                 {tab.label}
@@ -263,16 +337,8 @@ const Dashboard = () => {
           >
             {activeTab === "overview" && (
               <div className="space-y-[32px]">
-                {/* Nutritional Velocity Chart */}
-                <div className="bg-surface-container-lowest rounded-2xl p-6 card-shadow-soft border border-outline-variant/30">
-                  <h3 className="font-headline text-base font-semibold text-on-surface mb-4 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">analytics</span>
-                    Nutritional Velocity
-                  </h3>
-                  <div className="min-h-[300px] w-full flex items-center justify-center">
-                    <MacroChart totals={log.totals} />
-                  </div>
-                </div>
+                {/* 7-Day Trend Chart */}
+                <WeeklyTrendChart />
 
                 {/* Recent Meals / Logged Items */}
                 <div className="bg-surface-container-lowest rounded-2xl card-shadow-soft border border-outline-variant/30 overflow-hidden">
@@ -293,7 +359,7 @@ const Dashboard = () => {
                         <p className="text-sm text-on-surface-variant font-medium">
                           No meals logged yet today.
                         </p>
-                        <p className="text-xs text-outline mt-1">Search for food above to start tracking.</p>
+                        <p className="text-xs text-outline mt-1">Use the Log Food tab or voice input to start tracking.</p>
                       </div>
                     )}
                     {log.foodItems?.map((item, idx) => (
@@ -310,7 +376,7 @@ const Dashboard = () => {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-text-rich-black">
-                              {item.foodId?.name || "Unknown Food"}
+                              {item.name || "Unknown Food"}
                             </p>
                             <p className="text-[11px] text-on-surface-variant font-medium">
                               {item.servings} serving{item.servings > 1 ? 's' : ''}
@@ -319,8 +385,8 @@ const Dashboard = () => {
                         </div>
                         <div className="text-right">
                           <p className="font-headline text-sm font-bold text-primary">
-                            {item.foodId?.calories
-                              ? Math.round(item.foodId.calories * item.servings)
+                            {item.calories !== undefined
+                              ? Math.round(item.calories * item.servings)
                               : 0}
                           </p>
                           <p className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">kcal</p>
@@ -337,8 +403,27 @@ const Dashboard = () => {
             )}
 
             {activeTab === "search" && (
-              <div className="bg-surface-container-lowest rounded-2xl p-5 card-shadow-soft border border-outline-variant/30">
-                <FoodSearch onAddFood={handleAddFood} />
+              <div className="space-y-4">
+                {/* Voice Input */}
+                <div className="bg-surface-container-lowest rounded-2xl p-5 card-shadow-soft border border-outline-variant/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="material-symbols-outlined text-primary text-[20px]">mic</span>
+                    <h3 className="font-headline text-sm font-semibold text-on-surface">Voice Log</h3>
+                    {voiceLoading && (
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin ml-auto" />
+                    )}
+                  </div>
+                  <VoiceInput onResult={handleVoiceResult} />
+                </div>
+
+                {/* Manual food search */}
+                <div className="bg-surface-container-lowest rounded-2xl p-5 card-shadow-soft border border-outline-variant/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="material-symbols-outlined text-primary text-[20px]">search</span>
+                    <h3 className="font-headline text-sm font-semibold text-on-surface">Search Database</h3>
+                  </div>
+                  <FoodSearch onAddFood={handleAddFood} />
+                </div>
               </div>
             )}
 
@@ -379,7 +464,7 @@ const Dashboard = () => {
               </div>
               <div className="text-left">
                 <p className="text-sm font-semibold text-text-rich-black">AI Coach</p>
-                <p className="text-[11px] text-on-surface-variant">Chat with Mezan</p>
+                <p className="text-[11px] text-on-surface-variant">Chat with Nova</p>
               </div>
             </button>
 

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { auth } from '../config/firebase';
 
 // Detect environment
 const isVercel = window.location.hostname.includes('vercel.app');
@@ -14,10 +15,22 @@ const client = axios.create({
 });
 
 client.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+  async (config) => {
+    if (auth.currentUser) {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      } catch (err) {
+        console.error("Error getting Firebase token", err);
+      }
+    } else {
+      // Fallback to legacy token logic just in case
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
     return config;
   },
@@ -32,6 +45,7 @@ client.interceptors.response.use(
     // If we get a 401 (Unauthorized), the token is likely invalid/expired
     if (status === 401) {
       localStorage.removeItem('token');
+      sessionStorage.removeItem('token');
       // Only redirect if we're not already on the login page to avoid loops
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
@@ -43,3 +57,4 @@ client.interceptors.response.use(
 );
 
 export default client;
+

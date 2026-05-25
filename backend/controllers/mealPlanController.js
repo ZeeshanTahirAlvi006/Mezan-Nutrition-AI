@@ -1,9 +1,7 @@
-import User from '../models/User.js';
-import MealPlan from '../models/MealPlan.js';
-import DailyLog from '../models/DailyLog.js';
-import Message from '../models/Message.js';
-import ChatSession from '../models/ChatSession.js';
+import { db } from '../config/firebase.js';
+import { validateMealPlan } from '../models/MealPlan.js';
 import { getCompletionWithFallback } from '../services/aiService.js';
+import { getWeatherByLocation } from '../services/weatherService.js';
 
 // ---------- Helper: Calculate TDEE using Mifflin-St Jeor ----------
 const calculateTDEE = (user) => {
@@ -24,35 +22,45 @@ const calculateTDEE = (user) => {
 };
 
 // ---------- Helper: Build AI prompt context ----------
-const buildContext = async (user) => {
+const buildContext = async (userId) => {
   // Get recent daily logs (last 7 days)
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const recentLogs = await DailyLog.find({ userId: user._id, date: { $gte: sevenDaysAgo } })
-    .populate('foodItems.foodId', 'name calories protein carbs fats')
-    .sort('-date')
+  
+  const logsSnapshot = await db.collection('dailyLogs')
+    .where('userId', '==', userId)
+    .where('date', '>=', sevenDaysAgo.toISOString())
+    .orderBy('date', 'desc')
     .limit(7)
-    .lean();
+    .get();
+
+  const recentLogs = logsSnapshot.docs.map(doc => doc.data());
 
   const logSummary = recentLogs.map(log => {
-    const foods = log.foodItems.map(fi => fi.foodId?.name || 'Unknown').join(', ');
+    // We embedded food items in Firestore, so we don't need to populate
+    const foods = (log.foodItems || []).map(fi => fi.name || 'Unknown').join(', ');
     return `${new Date(log.date).toLocaleDateString()}: ${foods} (${log.totals?.calories || 0} kcal)`;
   }).join('\n') || 'No recent food logs.';
 
-  // Get recent chat messages for preference extraction (SCOPED TO USER)
-  const sessions = await ChatSession.find({ user: user._id }).select('_id');
-  const sessionIds = sessions.map(s => s._id);
+  // Get recent chat messages (embedded in sessions)
+  const sessionsSnapshot = await db.collection('chatSessions')
+    .where('userId', '==', userId)
+    .get();
+  
+  let allUserMessages = [];
+  sessionsSnapshot.forEach(doc => {
+    const sessionData = doc.data();
+    if (sessionData.messages) {
+      const userMsgs = sessionData.messages
+        .filter(m => m.role === 'user')
+        .map(m => m.content);
+      allUserMessages.push(...userMsgs);
+    }
+  });
 
-  const recentMessages = await Message.find({
-    role: 'user',
-    session: { $in: sessionIds }
-  })
-    .sort('-createdAt')
-    .limit(15)
-    .select('content')
-    .lean();
-
-  const chatSummary = recentMessages.map(m => m.content).join(' | ') || 'No chat history.';
+  // Just grab the last 15 user messages
+  const recentMessages = allUserMessages.slice(-15);
+  const chatSummary = recentMessages.join(' | ') || 'No chat history.';
 
   return { logSummary, chatSummary };
 };
@@ -61,11 +69,12 @@ const buildContext = async (user) => {
 // @route   POST /api/meal-plan/generate
 const generateMealPlan = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    if (!userDoc.exists) return res.status(404).json({ message: 'User not found' });
+    const user = userDoc.data();
 
     const targetCalories = calculateTDEE(user);
-    const { logSummary, chatSummary } = await buildContext(user);
+    const { logSummary, chatSummary } = await buildContext(req.user.uid);
 
     const today = new Date();
     const dates = [];
@@ -73,6 +82,24 @@ const generateMealPlan = async (req, res) => {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
       dates.push(d.toISOString().split('T')[0]);
+    }
+
+    let weatherPlanContext = '';
+    try {
+      const weather = await getWeatherByLocation(user.location || 'UAE');
+      if (weather && weather.daily) {
+        const forecastString = weather.daily.slice(0, 7).map(day => {
+          return `- Date: ${day.date}, Temp: ${day.tempMin}°C to ${day.tempMax}°C, Condition: ${day.condition} ${day.emoji}`;
+        }).join('\n');
+        
+        weatherPlanContext = `\n\nLOCAL WEATHER 7-DAY FORECAST (${weather.location.name}, ${weather.location.country}):\n${forecastString}
+\nWEATHER-ADAPTIVE DIETARY DIRECTIVES:
+- Hot/Very Warm Days (Max Temp > 35°C): Schedule cooling, light, high-water content, and refreshing meals (e.g., chilled yogurt bowls, crisp salads, cold grain wraps, smoothies, fresh raw veggies) and emphasize proper hydration. Avoid heavy, piping hot, or greasy foods.
+- Cool/Cold Days (Max Temp < 18°C or Min Temp < 12°C): Schedule comforting, warm, thermal-regulating, and cooked meals (e.g., hot soups, stews, warm curries, hot oatmeal, baked entrees) that promote dynamic thermogenesis and internal warmth.
+- Respect these weather directives dynamically for each of the 7 days based on the forecasted temperature and conditions for that date.`;
+      }
+    } catch (weatherErr) {
+      console.error('[Meal Plan Controller] Failed to inject weather forecast:', weatherErr.message);
     }
 
     const prompt = `You are a world-class nutritionist. Generate a personalized 7-day meal plan.
@@ -90,7 +117,7 @@ ${logSummary}
 CHAT PREFERENCES (extracted from recent conversations):
 ${chatSummary}
 
-DATES for the 7 days: ${dates.join(', ')}
+DATES for the 7 days: ${dates.join(', ')}${weatherPlanContext}
 
 CRITICAL INSTRUCTIONS:
 1. Each day MUST total close to ${targetCalories} kcal (within 5% tolerance).
@@ -99,6 +126,7 @@ CRITICAL INSTRUCTIONS:
 4. Keep the user's home items (pantry) in view and prioritize incorporating these ingredients into the generated meals where appropriate, so that the user can use what they already have at home.
 5. Incorporate variety — avoid repeating the same meals across days.
 6. Return ONLY valid JSON — no markdown, no code fences, no explanation.
+7. Ensure that the daily meal selections logically adapt to the daily weather forecast provided above.
 
 Return EXACTLY this JSON structure:
 {
@@ -127,24 +155,19 @@ Return EXACTLY this JSON structure:
       parsed = JSON.parse(raw);
     } catch (e) {
       console.log('[DEBUG] Initial JSON parse failed. Raw response:', raw.substring(0, 500));
-      
-      // Try to extract JSON from markdown fences
       const markdownMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (markdownMatch) {
         try {
           parsed = JSON.parse(markdownMatch[1]);
         } catch (e2) {
-          console.log('[DEBUG] Markdown extraction failed');
           throw new Error(`Invalid JSON after markdown extraction: ${e2.message}`);
         }
       } else {
-        // Try to find JSON object pattern and extract it
         const jsonMatch = raw.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           try {
             parsed = JSON.parse(jsonMatch[0]);
           } catch (e2) {
-            console.log('[DEBUG] Direct JSON extraction failed');
             throw new Error(`Invalid JSON from direct extraction: ${e2.message}`);
           }
         } else {
@@ -157,7 +180,6 @@ Return EXACTLY this JSON structure:
 
   } catch (error) {
     console.error('Generate Meal Plan Error:', error.message);
-    console.error('Full error:', error);
     res.status(500).json({ message: 'Failed to generate meal plan: ' + error.message });
   }
 };
@@ -171,50 +193,33 @@ const saveMealPlan = async (req, res) => {
       return res.status(400).json({ message: 'Invalid meal plan data.' });
     }
 
-    // Delete any existing plan for this user
-    await MealPlan.deleteMany({ user: req.user._id });
-
-    const mealPlan = await MealPlan.create({
-      user: req.user._id,
+    const payload = {
+      userId: req.user.uid,
       days: days.map(d => ({
         ...d,
-        date: new Date(d.date),
+        date: new Date(d.date).toISOString(),
         meals: {
-          Breakfast: (d.meals?.Breakfast || []).map(item => ({
-            ...item,
-            calories: Number(item.calories) || 0,
-            protein: Number(item.protein) || 0,
-            carbs: Number(item.carbs) || 0,
-            fats: Number(item.fats) || 0
-          })),
-          Lunch: (d.meals?.Lunch || []).map(item => ({
-            ...item,
-            calories: Number(item.calories) || 0,
-            protein: Number(item.protein) || 0,
-            carbs: Number(item.carbs) || 0,
-            fats: Number(item.fats) || 0
-          })),
-          Dinner: (d.meals?.Dinner || []).map(item => ({
-            ...item,
-            calories: Number(item.calories) || 0,
-            protein: Number(item.protein) || 0,
-            carbs: Number(item.carbs) || 0,
-            fats: Number(item.fats) || 0
-          })),
-          Snacks: (d.meals?.Snacks || []).map(item => ({
-            ...item,
-            calories: Number(item.calories) || 0,
-            protein: Number(item.protein) || 0,
-            carbs: Number(item.carbs) || 0,
-            fats: Number(item.fats) || 0
-          }))
+          Breakfast: (d.meals?.Breakfast || []).map(item => ({ ...item, calories: Number(item.calories) || 0, protein: Number(item.protein) || 0, carbs: Number(item.carbs) || 0, fats: Number(item.fats) || 0 })),
+          Lunch: (d.meals?.Lunch || []).map(item => ({ ...item, calories: Number(item.calories) || 0, protein: Number(item.protein) || 0, carbs: Number(item.carbs) || 0, fats: Number(item.fats) || 0 })),
+          Dinner: (d.meals?.Dinner || []).map(item => ({ ...item, calories: Number(item.calories) || 0, protein: Number(item.protein) || 0, carbs: Number(item.carbs) || 0, fats: Number(item.fats) || 0 })),
+          Snacks: (d.meals?.Snacks || []).map(item => ({ ...item, calories: Number(item.calories) || 0, protein: Number(item.protein) || 0, carbs: Number(item.carbs) || 0, fats: Number(item.fats) || 0 }))
         }
-      }))
-    });
+      })),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
 
-    res.status(201).json(mealPlan);
+    const validatedPlan = validateMealPlan(payload);
+
+    // Overwrite the single meal plan document for this user
+    await db.collection('mealPlans').doc(req.user.uid).set(validatedPlan);
+
+    res.status(201).json(validatedPlan);
   } catch (error) {
     console.error('Save Meal Plan Error:', error);
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ message: 'Validation Error', errors: error.errors });
+    }
     res.status(500).json({ message: 'Failed to save meal plan.' });
   }
 };
@@ -223,13 +228,16 @@ const saveMealPlan = async (req, res) => {
 // @route   GET /api/meal-plan/current
 const getCurrentMealPlan = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    const user = userDoc.exists ? userDoc.data() : {};
     const targetCalories = calculateTDEE(user);
 
-    const plan = await MealPlan.findOne({ user: req.user._id });
-    if (!plan) {
+    const planDoc = await db.collection('mealPlans').doc(req.user.uid).get();
+    if (!planDoc.exists) {
       return res.json({ plan: null, targetCalories });
     }
+
+    const plan = planDoc.data();
 
     // Strip past days (keep today and future)
     const todayStr = new Date().toISOString().split('T')[0];
@@ -241,10 +249,10 @@ const getCurrentMealPlan = async (req, res) => {
     // If we stripped some days, update the DB
     if (futureDays.length !== plan.days.length) {
       plan.days = futureDays;
-      await plan.save();
+      await db.collection('mealPlans').doc(req.user.uid).update({ days: futureDays, updatedAt: new Date() });
     }
 
-    res.json({ plan: { ...plan.toObject(), days: futureDays }, targetCalories });
+    res.json({ plan: { ...plan, days: futureDays }, targetCalories });
   } catch (error) {
     console.error('Get Current Meal Plan Error:', error);
     res.status(500).json({ message: 'Failed to fetch meal plan.' });
@@ -256,8 +264,8 @@ const getCurrentMealPlan = async (req, res) => {
 const suggestReplacement = async (req, res) => {
   try {
     const { foodName, calories, protein, carbs, fats, mealType } = req.body;
-    const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    const userDoc = await db.collection('users').doc(req.user.uid).get();
+    const user = userDoc.exists ? userDoc.data() : {};
 
     const prompt = `You are a nutritionist. A user in ${user.location || 'UAE'} wants to replace "${foodName}" in their ${mealType || 'meal'}.
 Reason: Not available in their area.
@@ -299,25 +307,27 @@ Return ONLY valid JSON — no markdown, no explanation:
 const commitReplacement = async (req, res) => {
   try {
     const { dayDate, mealType, foodIndex, newFood } = req.body;
-    // newFood = { foodName, calories, protein, carbs, fats }
 
     const whitelistedMealTypes = ['Breakfast', 'Lunch', 'Dinner', 'Snacks'];
     if (!whitelistedMealTypes.includes(mealType)) {
-      return res.status(400).json({ message: 'Invalid mealType. Permitted values are Breakfast, Lunch, Dinner, Snacks.' });
+      return res.status(400).json({ message: 'Invalid mealType.' });
     }
 
     if (!newFood || !newFood.foodName) {
       return res.status(400).json({ message: 'newFood with foodName is required.' });
     }
 
-    const plan = await MealPlan.findOne({ user: req.user._id });
-    if (!plan) return res.status(404).json({ message: 'No saved meal plan found. Save your plan first.' });
+    const planRef = db.collection('mealPlans').doc(req.user.uid);
+    const planDoc = await planRef.get();
+    
+    if (!planDoc.exists) return res.status(404).json({ message: 'No saved meal plan found.' });
+    const plan = planDoc.data();
 
     const dayPlan = plan.days.find(d => new Date(d.date).toISOString().split('T')[0] === dayDate);
     if (!dayPlan) return res.status(404).json({ message: 'Day not found in plan' });
 
     const mealItems = dayPlan.meals[mealType];
-    if (!mealItems || !mealItems[foodIndex]) return res.status(404).json({ message: 'Food item not found at that index' });
+    if (!mealItems || !mealItems[foodIndex]) return res.status(404).json({ message: 'Food item not found' });
 
     // Replace the item
     mealItems[foodIndex] = {
@@ -336,8 +346,7 @@ const commitReplacement = async (req, res) => {
     });
     dayPlan.totalCalories = dayTotal;
 
-    plan.markModified('days');
-    await plan.save();
+    await planRef.update({ days: plan.days, updatedAt: new Date() });
 
     res.json({ updatedDay: dayPlan });
   } catch (error) {
@@ -347,4 +356,3 @@ const commitReplacement = async (req, res) => {
 };
 
 export { generateMealPlan, saveMealPlan, getCurrentMealPlan, suggestReplacement, commitReplacement };
-

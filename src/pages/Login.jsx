@@ -2,23 +2,37 @@ import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import { motion } from "framer-motion";
+import GoogleLoginButton from "../components/auth/GoogleLoginButton";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const { login } = useContext(AuthContext);
+  const { login, googleLogin } = useContext(AuthContext);
   const navigate = useNavigate();
   const [error, setError] = useState("");
+
+  const handleGoogleSuccess = async (googlePayload) => {
+    try {
+      const data = await googleLogin(googlePayload, rememberMe);
+      if (!data.age || !data.weight || !data.height) {
+        navigate("/onboarding");
+      } else {
+        navigate(data.role === 'admin' ? '/admin' : '/dashboard');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Google Login failed");
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const data = await login(email, password);
+      const data = await login(email, password, rememberMe);
       navigate(data.role === 'admin' ? '/admin' : '/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to login");
+      setError(err.response?.data?.message || err.message || "Failed to login");
     }
   };
 
@@ -119,9 +133,9 @@ const Login = () => {
                 <label className="block text-xs font-bold text-outline uppercase tracking-wider" htmlFor="password">
                   PASSWORD
                 </label>
-                <a className="text-xs font-bold text-primary hover:underline" href="#forgot">
+                <Link className="text-xs font-bold text-primary hover:underline" to="/forgot-password">
                   Forgot?
-                </a>
+                </Link>
               </div>
               <div className="relative group">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors text-[20px]">
@@ -170,6 +184,19 @@ const Login = () => {
               Log In
             </button>
           </form>
+
+          {/* Google Login commented out for now
+          <div className="relative my-6 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-outline-variant/20"></div>
+            </div>
+            <span className="relative px-3 bg-surface-off-white text-xs font-bold text-outline uppercase tracking-wider">
+              or
+            </span>
+          </div>
+
+          <GoogleLoginButton onSuccess={handleGoogleSuccess} onError={(err) => setError(err)} rememberMe={rememberMe} />
+          */}
 
           {/* Registration Footer */}
           <div className="mt-8 text-center">

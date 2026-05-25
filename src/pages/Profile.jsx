@@ -37,6 +37,14 @@ const Profile = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Security Recovery States
+  const [securityQuestion, setSecurityQuestion] = useState("");
+  const [securityAnswer, setSecurityAnswer] = useState("");
+  const [hasSecurityQuestion, setHasSecurityQuestion] = useState(false);
+  const [secLoading, setSecLoading] = useState(false);
+  const [secSuccessMsg, setSecSuccessMsg] = useState("");
+  const [secErrorMsg, setSecErrorMsg] = useState("");
+
   // Status Alerts
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -66,6 +74,7 @@ const Profile = () => {
       setLocation(user.location || "UAE");
       setRestrictions(user.restrictions || []);
       setTargetCalories(user.targetCalories !== undefined && user.targetCalories !== null ? String(user.targetCalories) : "2000");
+      setHasSecurityQuestion(!!user.hasSecurityQuestion);
     }
   }, [user]);
 
@@ -184,19 +193,50 @@ const Profile = () => {
         payload.password = newPassword;
       }
 
-      await client.put("/api/users/profile", payload);
+      const updatedData = await client.put("/api/users/profile", payload);
       await refreshUser();
       
       setSuccessMsg("✨ Profile saved successfully!");
       setNewPassword("");
       setConfirmPassword("");
-      
+
       // Clear toast after 4s
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
       setErrorMsg(err.response?.data?.message || "Failed to update profile. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Save security question + answer independently
+  const handleSaveSecurityQuestion = async (e) => {
+    e.preventDefault();
+    const q = securityQuestion.trim();
+    const a = securityAnswer.trim();
+    if (!q || !a) {
+      setSecErrorMsg("Both question and answer are required.");
+      return;
+    }
+    setSecLoading(true);
+    setSecErrorMsg("");
+    setSecSuccessMsg("");
+    try {
+      const { data } = await client.put("/api/users/profile", {
+        securityQuestion: q,
+        securityAnswer: a,
+      });
+      setSecSuccessMsg("🔒 Security question saved successfully!");
+      setSecurityQuestion("");
+      setSecurityAnswer("");
+      if (data?.hasSecurityQuestion !== undefined) {
+        setHasSecurityQuestion(data.hasSecurityQuestion);
+      }
+      setTimeout(() => setSecSuccessMsg(""), 4000);
+    } catch (err) {
+      setSecErrorMsg(err.response?.data?.message || "Failed to save. Please try again.");
+    } finally {
+      setSecLoading(false);
     }
   };
 
@@ -596,6 +636,7 @@ const Profile = () => {
                   </div>
                 )}
               </div>
+
             </div>
 
             {/* Sticky/Floating Save Action Bar */}
@@ -718,6 +759,91 @@ const Profile = () => {
                 </div>
               )}
             </div>
+          </div>
+        </form>
+
+        {/* ── Standalone Security Question Card ── */}
+        <form
+          onSubmit={handleSaveSecurityQuestion}
+          className="bg-surface-container-lowest border border-outline-variant/30 p-6 rounded-3xl shadow-sm space-y-6 max-w-[1200px] w-full mx-auto px-[24px] md:px-8"
+        >
+          {/* Section header */}
+          <div className="flex items-center gap-3 border-b border-outline-variant/20 pb-4">
+            <div className="bg-primary/10 p-2 rounded-xl text-primary">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div className="flex-1">
+              <h2 className="text-base font-bold text-text-rich-black">Password Recovery Question</h2>
+              <p className="text-xs text-on-surface-variant">
+                {hasSecurityQuestion
+                  ? "✅ A security question is already set. Fill both fields below to update it."
+                  : "⚠️ No security question set yet. Add one to recover your account without email."}
+              </p>
+            </div>
+          </div>
+
+          {/* Feedback banners */}
+          {secSuccessMsg && (
+            <div className="bg-emerald-50 text-emerald-800 border border-emerald-200/50 p-4 rounded-2xl flex items-center gap-3 shadow-sm animate-slide-in">
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+              <p className="text-sm font-semibold">{secSuccessMsg}</p>
+            </div>
+          )}
+          {secErrorMsg && (
+            <div className="bg-rose-50 text-rose-800 border border-rose-200/50 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
+              <XCircle className="w-5 h-5 text-rose-500 flex-shrink-0" />
+              <p className="text-sm font-semibold">{secErrorMsg}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Question input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                Custom Security Question
+              </label>
+              <input
+                type="text"
+                value={securityQuestion}
+                onChange={(e) => setSecurityQuestion(e.target.value)}
+                placeholder='e.g., "What was my first car brand?"'
+                className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-medium"
+              />
+              <p className="text-[10px] text-on-surface-variant">
+                💡 Choose something unique and memorable that only you'd know.
+              </p>
+            </div>
+
+            {/* Answer input */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                Your Answer
+              </label>
+              <input
+                type="text"
+                value={securityAnswer}
+                onChange={(e) => setSecurityAnswer(e.target.value)}
+                placeholder='e.g., "Toyota"'
+                className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-medium"
+              />
+              <p className="text-[10px] text-on-surface-variant">
+                🔒 Your question is stored as-is. Only your answer is salted and hashed for security.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={secLoading || !securityQuestion.trim() || !securityAnswer.trim()}
+              className={`px-8 py-3.5 rounded-2xl text-sm font-bold shadow-md cursor-pointer transition-all duration-200 ${
+                secLoading || !securityQuestion.trim() || !securityAnswer.trim()
+                  ? "bg-outline-variant/40 text-on-surface-variant cursor-not-allowed shadow-none"
+                  : "bg-primary text-white hover:bg-primary-container hover:shadow-lg active:scale-95"
+              }`}
+            >
+              {secLoading ? "Saving..." : hasSecurityQuestion ? "Update Security Question" : "Set Security Question"}
+            </button>
           </div>
         </form>
       </main>
