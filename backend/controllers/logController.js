@@ -193,7 +193,12 @@ const getDailyLog = async (req, res) => {
     }
   } catch (error) {
     console.error('Get Daily Log Error:', error);
-    res.status(500).json({ message: error.message });
+    // Graceful fallback during Firestore quota exhaustion or DB offline
+    res.json({
+      totals: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+      foodItems: [],
+      isQuotaExceededFallback: true
+    });
   }
 };
 
@@ -244,7 +249,8 @@ const getWeeklyLogs = async (req, res) => {
     res.json(logs);
   } catch (error) {
     console.error('Get Weekly Logs Error:', error);
-    res.status(500).json({ message: error.message });
+    // Graceful fallback during Firestore quota exhaustion or DB offline
+    res.json([]);
   }
 };
 
