@@ -5,7 +5,8 @@
 
 // Mapping of USDA nutrient IDs and typical nutrient names to standard macros
 const NUTRIENT_MAPPING = {
-  calories: { ids: [1008, 2047, 2048], keywords: ['energy', 'kcal', 'calories'] },
+  // Remove 2047 (which is Energy in kJ) and keep 1008 and 2048 (which are in kcal)
+  calories: { ids: [1008, 2048], keywords: ['kcal', 'calories'] },
   protein: { ids: [1003], keywords: ['protein'] },
   carbs: { ids: [1005], keywords: ['carbohydrate', 'by difference'] },
   fats: { ids: [1004], keywords: ['total lipid', 'fat'] }
@@ -14,10 +15,16 @@ const NUTRIENT_MAPPING = {
 /**
  * Helper to extract nutrient value by keyword or official USDA nutrient ID
  */
-const extractNutrientValue = (nutrients, mapping) => {
+const extractNutrientValue = (nutrients, mapping, isCalorie = false) => {
   const match = nutrients.find(n => {
     const id = Number(n.nutrientId);
     const name = (n.nutrientName || '').toLowerCase();
+    const unit = (n.unitName || '').toLowerCase();
+    
+    // If we are looking for calories, explicitly ignore Kilojoules (kJ)
+    if (isCalorie && (unit.includes('kj') || unit.includes('joule') || name.includes('joule'))) {
+      return false;
+    }
     
     // Match by official USDA ID
     if (mapping.ids.includes(id)) return true;
@@ -62,7 +69,7 @@ export const fetchUSDANutrition = async (foodName) => {
     const food = data.foods[0];
     const nutrients = food.foodNutrients || [];
     
-    const calories = extractNutrientValue(nutrients, NUTRIENT_MAPPING.calories);
+    const calories = extractNutrientValue(nutrients, NUTRIENT_MAPPING.calories, true);
     const protein = extractNutrientValue(nutrients, NUTRIENT_MAPPING.protein);
     const carbs = extractNutrientValue(nutrients, NUTRIENT_MAPPING.carbs);
     const fats = extractNutrientValue(nutrients, NUTRIENT_MAPPING.fats);
@@ -112,7 +119,7 @@ export const searchUSDAFoods = async (query, limit = 15) => {
     
     return data.foods.map(food => {
       const nutrients = food.foodNutrients || [];
-      const calories = extractNutrientValue(nutrients, NUTRIENT_MAPPING.calories);
+      const calories = extractNutrientValue(nutrients, NUTRIENT_MAPPING.calories, true);
       const protein = extractNutrientValue(nutrients, NUTRIENT_MAPPING.protein);
       const carbs = extractNutrientValue(nutrients, NUTRIENT_MAPPING.carbs);
       const fats = extractNutrientValue(nutrients, NUTRIENT_MAPPING.fats);

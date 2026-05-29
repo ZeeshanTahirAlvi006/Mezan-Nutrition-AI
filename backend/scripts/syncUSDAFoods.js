@@ -73,6 +73,15 @@ const runSync = async () => {
         // Fetch official values from USDA
         const usdaItem = await fetchUSDANutrition(local.name);
         if (usdaItem) {
+          // Simple validation: Ensure the returned USDA description contains the primary local name keyword (e.g. "Apple")
+          const firstWord = local.name.split(' ')[0].replace(/[^a-zA-Z]/g, '').toLowerCase();
+          const usdaNameLower = usdaItem.name.toLowerCase();
+          
+          if (!usdaNameLower.includes(firstWord)) {
+            console.warn(`   -> [⚠️ MATCH SKIP] USDA returned "${usdaItem.name}" for local "${local.name}". Name does not match well enough.`);
+            continue;
+          }
+
           console.log(`   -> Found in USDA: "${usdaItem.name}"`);
           console.log(`   -> Macros updated: Cal:${usdaItem.calories} P:${usdaItem.protein}g C:${usdaItem.carbs}g F:${usdaItem.fats}g`);
           
