@@ -1,14 +1,15 @@
 import { db } from '../config/firebase.js';
 import { validateUser } from '../models/User.js';
 import { recalculateStreak } from '../utils/streak.js';
+import { invalidateUserCache } from '../middleware/auth.js';
 
 // @desc    Get user profile
 // @route   GET /api/users/profile
 const getUserProfile = async (req, res) => {
   try {
     try {
-      // Recalculate streak to ensure the streakCount is accurate on page load
-      await recalculateStreak(req.user.uid);
+      // Recalculate streak in the background to avoid blocking the profile endpoint response
+      recalculateStreak(req.user.uid).catch(err => console.error("Background streak recalculate failed:", err));
 
       const userRef = db.collection('users').doc(req.user.uid);
       const doc = await userRef.get();
@@ -63,6 +64,7 @@ const updateUserProfile = async (req, res) => {
     const validatedData = validateUser(updatedData);
 
     await userRef.set(validatedData, { merge: true });
+    invalidateUserCache(req.user.uid);
 
     res.json({
       _id: req.user.uid,

@@ -8,6 +8,7 @@ import {
 import { Pinecone } from '@pinecone-database/pinecone';
 import pdfParse from '../scripts/pdfParser.cjs';
 import crypto from 'crypto';
+import { invalidateFoodCache } from '../utils/foodCache.js';
 
 // Helpers
 const startOfToday = () => {
@@ -325,6 +326,7 @@ const createFood = async (req, res) => {
     };
 
     const docRef = await db.collection('foods').add(newFood);
+    invalidateFoodCache();
     res.status(201).json({ _id: docRef.id, ...newFood });
   } catch (error) {
     res.status(500).json({ message: 'Failed to create food item' });
@@ -353,6 +355,7 @@ const updateFood = async (req, res) => {
 
     updates.updatedAt = new Date();
     await foodRef.update(updates);
+    invalidateFoodCache();
     
     const updated = await foodRef.get();
     res.json({ _id: updated.id, ...updated.data() });
@@ -365,6 +368,7 @@ const updateFood = async (req, res) => {
 const deleteFood = async (req, res) => {
   try {
     await db.collection('foods').doc(req.params.id).delete();
+    invalidateFoodCache();
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete food item' });
@@ -389,6 +393,7 @@ const importFoodCsv = async (req, res) => {
     }
     
     await batch.commit();
+    invalidateFoodCache();
 
     res.json({ imported, skipped: req.parsedCsvRows.length - imported, errors: errors.slice(0, 50) });
   } catch (error) {

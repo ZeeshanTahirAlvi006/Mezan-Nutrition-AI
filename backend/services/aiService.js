@@ -2,7 +2,7 @@ import { Mistral } from '@mistralai/mistralai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import Groq from 'groq-sdk';
 import OpenAI from 'openai';
-import { getWeatherByLocation } from './weatherService.js';
+import { getWeatherByLocation, getWeatherCached, weatherCache, CACHE_DURATION } from './weatherService.js';
 import { buildTools } from './aiTools.js';
 import { buildSystemPrompt, buildWeatherContext } from './aiPrompt.js';
 
@@ -195,11 +195,26 @@ const getCompletionWithFallback = async (params) => {
 
 const generateChatResponse = async (user, messages) => {
   try {
-    // ── 1. Fetch weather context ─────────────────
+    // ── 1. Fetch weather context (Stale-While-Revalidate to make it non-blocking!) ─────────────────
     let weatherContext = '';
     try {
-      const weather = await getWeatherByLocation(user.location || 'UAE');
-      weatherContext = buildWeatherContext(weather);
+      const location = user.location || 'UAE';
+      const cachedWeather = getWeatherCached(location);
+      
+      if (cachedWeather) {
+        weatherContext = buildWeatherContext(cachedWeather);
+        // If the cache is expired, trigger background revalidation
+        const normalizedKey = location.trim().toLowerCase();
+        const cachedEntry = weatherCache[normalizedKey];
+        if (cachedEntry && Date.now() - cachedEntry.timestamp >= CACHE_DURATION) {
+          console.log(`[Weather Service] Background revalidating weather for "${location}"`);
+          getWeatherByLocation(location).catch(err => console.error("Background weather fetch failed:", err.message));
+        }
+      } else {
+        // Cache miss: Trigger background fetch so it's ready next time, do not block the chat response
+        console.log(`[Weather Service] Cache miss, triggering background weather fetch for "${location}"`);
+        getWeatherByLocation(location).catch(err => console.error("Background weather fetch failed:", err.message));
+      }
     } catch (weatherErr) {
       console.error('[AI Service] Weather context failed:', weatherErr.message);
     }
