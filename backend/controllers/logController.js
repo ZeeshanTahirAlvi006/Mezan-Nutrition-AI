@@ -2,6 +2,7 @@ import { db } from '../config/firebase.js';
 import { validateDailyLog } from '../models/DailyLog.js';
 import { recalculateStreak } from '../utils/streak.js';
 import { getCachedFoods } from '../utils/foodCache.js';
+import { connectMongoDB, MongoDailyLog } from '../utils/mongodbFallback.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -44,18 +45,16 @@ const writeBackupLog = (key, logData) => {
   }
 };
 
-// Background syncer to migrate offline disk logs back to Firestore once quota resets
+// Background syncer to migrate offline disk and MongoDB logs back to Firestore once quota resets
 const syncBackupToFirestore = async () => {
   try {
     const data = readBackupLogs();
     const keys = Object.keys(data);
-    if (keys.length === 0) return;
-
+    
+    // 1. Sync from local disk file
     let syncedCount = 0;
-
     for (const key of keys) {
       const log = data[key];
-      // Sync if it is marked as offline fallback or not yet synced to cloud
       if (log.isOfflineFallback || !log.syncedToCloud) {
         const [userId, dateString] = key.split('_');
         const logsRef = db.collection('dailyLogs');
@@ -86,10 +85,50 @@ const syncBackupToFirestore = async () => {
 
     if (syncedCount > 0) {
       fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2), 'utf8');
-      console.log(`[Backup System] Successfully synced ${syncedCount} offline logs to Firestore!`);
+      console.log(`[Backup System] Successfully synced ${syncedCount} offline logs from local disk to Firestore!`);
     }
+
+    // 2. Sync from MongoDB Atlas backup (if available)
+    try {
+      const mongoConnected = await connectMongoDB();
+      if (mongoConnected) {
+        const unsyncedMongoLogs = await MongoDailyLog.find({ syncedToCloud: { $ne: true } });
+        if (unsyncedMongoLogs.length > 0) {
+          console.log(`[Backup System] Found ${unsyncedMongoLogs.length} unsynced logs in MongoDB Atlas. Syncing...`);
+          for (const mLog of unsyncedMongoLogs) {
+            const logsRef = db.collection('dailyLogs');
+            const snapshot = await logsRef
+              .where('userId', '==', mLog.userId)
+              .where('date', '==', mLog.date)
+              .limit(1)
+              .get();
+
+            let logRef;
+            if (!snapshot.empty) {
+              logRef = snapshot.docs[0].ref;
+            } else {
+              logRef = logsRef.doc();
+            }
+
+            const cloudLog = mLog.toObject();
+            delete cloudLog._id;
+            delete cloudLog.__v;
+            delete cloudLog.key;
+            cloudLog.syncedToCloud = true;
+
+            await logRef.set(cloudLog);
+            
+            mLog.syncedToCloud = true;
+            await mLog.save();
+          }
+          console.log(`[Backup System] Successfully synced MongoDB fallback logs to Firestore!`);
+        }
+      }
+    } catch (mErr) {
+      console.warn("[Backup System] Background MongoDB cloud sync deferred:", mErr.message);
+    }
+
   } catch (err) {
-    // Suppress errors silently since database might still be quota exhausted
     console.warn(`[Backup System] Background sync postponed (Firestore still exhausted):`, err.message);
   }
 };
@@ -192,7 +231,7 @@ const createDailyLog = async (req, res) => {
       }
     }
 
-    // Determine current existing log (either from Firestore or disk fallback)
+    // Determine current existing log (either from Firestore, MongoDB, or disk fallback)
     let existingLog = null;
     const backupKey = `${req.user.uid}_${dateString}`;
     const backupLogs = readBackupLogs();
@@ -209,8 +248,22 @@ const createDailyLog = async (req, res) => {
         existingLog = snapshot.docs[0].data();
       }
     } catch (dbErr) {
-      console.warn("[Log Controller] Firestore query failed for existing log. Trying local disk backup...");
-      existingLog = backupLogs[backupKey] || null;
+      console.warn("[Log Controller] Firestore query failed. Trying MongoDB fallback...");
+      try {
+        const mongoConnected = await connectMongoDB();
+        if (mongoConnected) {
+          const mongoLog = await MongoDailyLog.findOne({ key: backupKey });
+          if (mongoLog) {
+            existingLog = mongoLog.toObject();
+          }
+        }
+      } catch (mongoErr) {
+        console.warn("[Log Controller] MongoDB fallback failed too. Trying disk fallback...");
+      }
+
+      if (!existingLog) {
+        existingLog = backupLogs[backupKey] || null;
+      }
     }
 
     let logData;
@@ -284,8 +337,28 @@ const createDailyLog = async (req, res) => {
         ...cloudLog
       });
     } catch (firestoreError) {
-      console.warn(`[Log Controller] Firestore quota exceeded. Saved to disk fallback instead!`, firestoreError.message);
+      console.warn(`[Log Controller] Firestore quota exceeded. Trying MongoDB Atlas fallback...`, firestoreError.message);
       
+      try {
+        const mongoConnected = await connectMongoDB();
+        if (mongoConnected) {
+          const mongoLog = await MongoDailyLog.findOneAndUpdate(
+            { key: backupKey },
+            { ...validatedLog, key: backupKey, syncedToCloud: false },
+            { upsert: true, new: true }
+          );
+          console.log("[Log Controller] Successfully saved log to MongoDB Atlas fallback!");
+          return res.status(201).json({
+            _id: `mongo_${mongoLog._id}`,
+            ...validatedLog,
+            isOfflineFallback: true,
+            isMongoFallback: true
+          });
+        }
+      } catch (mongoErr) {
+        console.error("[Log Controller] MongoDB Atlas fallback failed too:", mongoErr.message);
+      }
+
       // Return 201 Created successfully with the disk copy!
       return res.status(201).json({
         _id: `temp_${backupKey}`,
@@ -332,6 +405,19 @@ const getDailyLog = async (req, res) => {
 
       return res.json(logData);
     } else {
+      // Try MongoDB fallback
+      try {
+        const mongoConnected = await connectMongoDB();
+        if (mongoConnected) {
+          const mongoLog = await MongoDailyLog.findOne({ key: backupKey });
+          if (mongoLog) {
+            return res.json(mongoLog.toObject());
+          }
+        }
+      } catch (mongoErr) {
+        console.warn("[Log Controller] MongoDB read failed:", mongoErr.message);
+      }
+
       // Check local disk backup
       const backupLogs = readBackupLogs();
       if (backupLogs[backupKey]) {
@@ -340,7 +426,20 @@ const getDailyLog = async (req, res) => {
       return res.json({ totals: { calories: 0, protein: 0, carbs: 0, fats: 0 }, foodItems: [] });
     }
   } catch (error) {
-    console.warn('[Log Controller] Firestore quota exceeded. Loading log from local disk backup...', error.message);
+    console.warn('[Log Controller] Firestore quota exceeded. Trying MongoDB fallback...', error.message);
+    
+    try {
+      const mongoConnected = await connectMongoDB();
+      if (mongoConnected) {
+        const mongoLog = await MongoDailyLog.findOne({ key: backupKey });
+        if (mongoLog) {
+          return res.json(mongoLog.toObject());
+        }
+      }
+    } catch (mongoErr) {
+      console.warn("[Log Controller] MongoDB fallback read failed:", mongoErr.message);
+    }
+
     const backupLogs = readBackupLogs();
     if (backupLogs[backupKey]) {
       return res.json(backupLogs[backupKey]);
@@ -402,8 +501,26 @@ const getWeeklyLogs = async (req, res) => {
     
     res.json(logs);
   } catch (error) {
-    console.warn('[Log Controller] Firestore quota exceeded. Building weekly trend from local disk backup...', error.message);
+    console.warn('[Log Controller] Firestore quota exceeded. Trying MongoDB fallback...', error.message);
     
+    try {
+      const mongoConnected = await connectMongoDB();
+      if (mongoConnected) {
+        const mongoLogs = await MongoDailyLog.find({
+          userId: req.user.uid,
+          date: { $gte: startStr, $lte: endStr }
+        });
+        
+        if (mongoLogs.length > 0) {
+          const logs = mongoLogs.map(l => l.toObject());
+          logs.sort((a, b) => new Date(a.date) - new Date(b.date));
+          return res.json(logs);
+        }
+      }
+    } catch (mongoErr) {
+      console.warn("[Log Controller] MongoDB weekly read failed:", mongoErr.message);
+    }
+
     const backupLogs = readBackupLogs();
     const logs = [];
     
