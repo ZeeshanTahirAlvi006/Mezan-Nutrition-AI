@@ -1,90 +1,41 @@
-import User from '../models/User.js';
-import generateToken from '../utils/generateToken.js';
-import { validatePassword } from '../utils/validatePassword.js';
-import bcrypt from 'bcryptjs';
+import { db } from '../config/firebase.js';
+import { validateUser } from '../models/User.js';
 import { recalculateStreak } from '../utils/streak.js';
-
-// @desc    Register a new user
-// @route   POST /api/users/register
-const registerUser = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const passwordError = validatePassword(password);
-    if (passwordError) {
-      return res.status(400).json({ message: passwordError });
-    }
-
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return res.status(400).json({ message: 'User already exists' });
-    }
-
-    const salt = await bcrypt.genSalt(12); // Increased cost factor to 12
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    const user = await User.create({
-      email,
-      password: hashedPassword,
-      role: 'user',
-    });
-
-    if (user) {
-      res.status(201).json({
-        _id: user._id,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id),
-      });
-    } else {
-      res.status(400).json({ message: 'Invalid user data' });
-    }
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// @desc    Auth user & get token
-// @route   POST /api/users/login
-const authUser = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const user = await User.findOne({ email });
-
-    if (user && user.isDisabled) {
-      return res.status(401).json({ message: 'Account has been disabled' });
-    }
-
-    if (user && (await bcrypt.compare(password, user.password))) {
-      res.json({
-        _id: user._id,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id),
-      });
-    } else {
-      res.status(401).json({ message: 'Invalid email or password' });
-    }
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
 
 // @desc    Get user profile
 // @route   GET /api/users/profile
 const getUserProfile = async (req, res) => {
   try {
-    await recalculateStreak(req.user._id);
-    const user = await User.findById(req.user._id).select('-password');
+    try {
+      // Recalculate streak to ensure the streakCount is accurate on page load
+      await recalculateStreak(req.user.uid);
 
-    if (user) {
-      res.json(user);
-    } else {
-      res.status(404).json({ message: 'User not found' });
+      const userRef = db.collection('users').doc(req.user.uid);
+      const doc = await userRef.get();
+
+      if (doc.exists) {
+        return res.json({
+          _id: doc.id,
+          uid: doc.id,
+          ...doc.data()
+        });
+      } else {
+        return res.status(404).json({ message: 'User profile not found in database' });
+      }
+    } catch (firestoreError) {
+      console.error("Firestore error in getUserProfile (using fallback):", firestoreError.message);
+      // Graceful fallback during Firestore quota exhaustion or DB offline
+      return res.json({
+        _id: req.user.uid,
+        uid: req.user.uid,
+        email: req.user.email,
+        name: req.user.name || req.user.email?.split('@')[0] || 'User',
+        role: req.user.role || 'user',
+        isQuotaExceededFallback: true
+      });
     }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -92,104 +43,92 @@ const getUserProfile = async (req, res) => {
 // @route   PUT /api/users/profile
 const updateUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const userRef = db.collection('users').doc(req.user.uid);
+    const doc = await userRef.get();
 
-    if (user) {
-      if (req.body.email !== undefined) {
-        const email = String(req.body.email).trim().toLowerCase();
-        if (email !== user.email) {
-          const emailExists = await User.findOne({ email });
-          if (emailExists) {
-            return res.status(400).json({ message: 'Email already in use' });
-          }
-          user.email = email;
-        }
-      }
+    let existingData = doc.exists ? doc.data() : {};
+    
+    // Merge new data
+    const updatedData = {
+      ...existingData,
+      ...req.body,
+      updatedAt: new Date()
+    };
 
-      if (req.body.password !== undefined && String(req.body.password).trim() !== '') {
-        const passwordError = validatePassword(req.body.password);
-        if (passwordError) {
-          return res.status(400).json({ message: passwordError });
-        }
-        const salt = await bcrypt.genSalt(12);
-        user.password = await bcrypt.hash(req.body.password, salt);
-      }
+    // Remove fields we don't want to accidentally overwrite or that belong to Firebase Auth
+    delete updatedData.password;
+    delete updatedData.uid;
 
-      if (req.body.age !== undefined) {
-        const age = Number(req.body.age);
-        if (isNaN(age) || age < 1 || age > 120 || !Number.isInteger(age)) {
-          return res.status(400).json({ message: 'Age must be an integer between 1 and 120' });
-        }
-        user.age = age;
-      }
+    // Validate against Zod schema
+    const validatedData = validateUser(updatedData);
 
-      if (req.body.weight !== undefined) {
-        const weight = Number(req.body.weight);
-        if (isNaN(weight) || weight <= 0 || weight > 500) {
-          return res.status(400).json({ message: 'Weight must be a positive number up to 500' });
-        }
-        user.weight = weight;
-      }
+    await userRef.set(validatedData, { merge: true });
 
-      if (req.body.height !== undefined) {
-        const height = Number(req.body.height);
-        if (isNaN(height) || height <= 0 || height > 300) {
-          return res.status(400).json({ message: 'Height must be a positive number up to 300' });
-        }
-        user.height = height;
-      }
-
-      if (req.body.healthGoals !== undefined) {
-        user.healthGoals = String(req.body.healthGoals).trim() || user.healthGoals;
-      }
-
-      if (req.body.restrictions !== undefined) {
-        if (!Array.isArray(req.body.restrictions)) {
-          return res.status(400).json({ message: 'Restrictions must be an array' });
-        }
-        user.restrictions = req.body.restrictions.map(r => String(r).trim());
-      }
-
-      if (req.body.location !== undefined) {
-        user.location = String(req.body.location).trim();
-      }
-
-      if (req.body.pantry !== undefined) {
-        if (!Array.isArray(req.body.pantry)) {
-          return res.status(400).json({ message: 'Pantry must be an array' });
-        }
-        user.pantry = req.body.pantry.map(r => String(r).trim()).filter(Boolean);
-      }
-
-      if (req.body.targetCalories !== undefined) {
-        const targetCalories = Number(req.body.targetCalories);
-        if (isNaN(targetCalories) || targetCalories < 500 || targetCalories > 10000 || !Number.isInteger(targetCalories)) {
-          return res.status(400).json({ message: 'Target calories must be an integer between 500 and 10000' });
-        }
-        user.targetCalories = targetCalories;
-      }
-
-      const updatedUser = await user.save();
-
-      res.json({
-        _id: updatedUser._id,
-        email: updatedUser.email,
-        age: updatedUser.age,
-        weight: updatedUser.weight,
-        height: updatedUser.height,
-        healthGoals: updatedUser.healthGoals,
-        restrictions: updatedUser.restrictions,
-        location: updatedUser.location,
-        streakCount: updatedUser.streakCount,
-        pantry: updatedUser.pantry,
-        targetCalories: updatedUser.targetCalories,
-      });
-    } else {
-      res.status(404).json({ message: 'User not found' });
-    }
+    res.json({
+      _id: req.user.uid,
+      uid: req.user.uid,
+      ...validatedData
+    });
   } catch (error) {
+    if (error.name === 'ZodError') {
+      return res.status(400).json({ message: 'Validation Error', errors: error.errors });
+    }
     res.status(500).json({ message: error.message });
   }
 };
 
-export { registerUser, authUser, updateUserProfile, getUserProfile };
+// @desc    Sync/Create user profile after Firebase Auth sign up or Google Login
+// @route   POST /api/users/sync
+// @route   POST /api/users/google-login (Legacy route mapped to sync)
+// @route   POST /api/users/register (Legacy route mapped to sync)
+const syncUserProfile = async (req, res) => {
+  try {
+    const userRef = db.collection('users').doc(req.user.uid);
+    const doc = await userRef.get();
+
+    if (!doc.exists) {
+      // Create new profile
+      const newData = {
+        email: req.user.email,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        role: 'user',
+        ...req.body // any initial setup data from signup form
+      };
+      
+      // Cleanup
+      delete newData.password;
+
+      const validatedData = validateUser(newData);
+      await userRef.set(validatedData);
+      
+      res.status(201).json({
+        _id: req.user.uid,
+        uid: req.user.uid,
+        ...validatedData
+      });
+    } else {
+      // User already exists, just return profile
+      res.json({
+        _id: doc.id,
+        uid: doc.id,
+        ...doc.data()
+      });
+    }
+  } catch (error) {
+     if (error.name === 'ZodError') {
+      return res.status(400).json({ message: 'Validation Error', errors: error.errors });
+    }
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Auth user & get token (Legacy fallback, now just syncs)
+// @route   POST /api/users/login
+const authUser = async (req, res) => {
+  // Handled entirely by frontend Firebase Auth now.
+  // This endpoint can just trigger a sync if called.
+  return syncUserProfile(req, res);
+};
+
+export { getUserProfile, updateUserProfile, syncUserProfile, authUser, syncUserProfile as registerUser, syncUserProfile as googleLogin };

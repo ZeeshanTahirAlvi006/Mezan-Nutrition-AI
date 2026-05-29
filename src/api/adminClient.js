@@ -20,6 +20,13 @@ const admin = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  uploadKnowledgeBasePdf: (file) => {
+    const form = new FormData();
+    form.append('file', file);
+    return client.post('/api/admin/knowledge-base/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 
   listChatSessions: (params) => client.get('/api/admin/chat/sessions', { params }),
   getChatMessages: (sessionId) => client.get(`/api/admin/chat/sessions/${sessionId}/messages`),

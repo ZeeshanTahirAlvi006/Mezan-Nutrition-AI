@@ -4,14 +4,28 @@ import { AuthContext } from "../context/AuthContext";
 import client from "../api/client";
 import { motion } from "framer-motion";
 import { validatePassword } from "../utils/validatePassword";
+import GoogleLoginButton from "../components/auth/GoogleLoginButton";
 
 const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const { login } = useContext(AuthContext);
+  const { register, googleLogin } = useContext(AuthContext);
   const navigate = useNavigate();
   const [error, setError] = useState("");
+
+  const handleGoogleSuccess = async (googlePayload) => {
+    try {
+      const data = await googleLogin(googlePayload, true);
+      if (!data.age || !data.weight || !data.height) {
+        navigate("/onboarding");
+      } else {
+        navigate(data.role === 'admin' ? '/admin' : '/dashboard');
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Google Registration failed");
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,11 +35,10 @@ const Register = () => {
       return;
     }
     try {
-      await client.post("/api/users/register", { email, password });
-      await login(email, password);
+      await register(email, password);
       navigate("/onboarding"); 
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to register");
+      setError(err.response?.data?.message || err.message || "Failed to register");
     }
   };
 
@@ -163,6 +176,19 @@ const Register = () => {
               Get Started
             </button>
           </form>
+
+          {/* Google Login commented out for now
+          <div className="relative my-6 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-outline-variant/20"></div>
+            </div>
+            <span className="relative px-3 bg-surface-off-white text-xs font-bold text-outline uppercase tracking-wider">
+              or
+            </span>
+          </div>
+
+          <GoogleLoginButton onSuccess={handleGoogleSuccess} onError={(err) => setError(err)} rememberMe={true} />
+          */}
 
           {/* Login Footer */}
           <div className="mt-8 text-center">

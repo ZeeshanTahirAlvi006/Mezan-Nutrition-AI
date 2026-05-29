@@ -1,5 +1,4 @@
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import { auth, db } from '../config/firebase.js';
 
 const protect = async (req, res, next) => {
   let token;
@@ -10,11 +9,29 @@ const protect = async (req, res, next) => {
   ) {
     try {
       token = req.headers.authorization.split(' ')[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(decoded.id).select('-password');
       
-      if (!req.user) {
-        return res.status(401).json({ message: 'User not found or account disabled' });
+      // Verify Firebase ID Token (handled by Firebase Auth, independent of Firestore quota)
+      const decodedToken = await auth.verifyIdToken(token);
+      
+      // Fetch user profile from Firestore with a graceful fallback for quota exhaustion or DB offline
+      try {
+        const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+        
+        if (!userDoc.exists) {
+          // User is authenticated in Firebase but doesn't have a profile in our DB yet
+          req.user = { uid: decodedToken.uid, email: decodedToken.email };
+        } else {
+          req.user = { uid: decodedToken.uid, ...userDoc.data() };
+        }
+      } catch (firestoreError) {
+        console.error("Firestore database error (falling back to decoded token):", firestoreError.message);
+        // Resilient fallback: use the verified token data so the user isn't logged out
+        req.user = {
+          uid: decodedToken.uid,
+          email: decodedToken.email,
+          name: decodedToken.name || decodedToken.email?.split('@')[0] || 'User',
+          role: 'user' // Default role
+        };
       }
 
       if (req.user.isDisabled) {
@@ -23,6 +40,7 @@ const protect = async (req, res, next) => {
       
       return next();
     } catch (error) {
+      console.error("Firebase auth error:", error);
       return res.status(401).json({ message: 'Not authorized, token failed' });
     }
   }
@@ -33,3 +51,4 @@ const protect = async (req, res, next) => {
 };
 
 export { protect };
+

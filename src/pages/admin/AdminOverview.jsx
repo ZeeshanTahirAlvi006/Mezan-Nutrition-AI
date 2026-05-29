@@ -7,6 +7,8 @@ import {
   MessageSquare,
   ClipboardList,
   Activity,
+  UploadCloud,
+  FileText
 } from 'lucide-react';
 import {
   LineChart,
@@ -32,6 +34,25 @@ const StatCard = ({ icon: Icon, label, value, sub }) => (
 const AdminOverview = () => {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
+
+  const handlePdfUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploading(true);
+    setUploadMsg('');
+    try {
+      const { data } = await admin.uploadKnowledgeBasePdf(file);
+      setUploadMsg(`Success! ${data.chunks} chunks embedded into Pinecone.`);
+    } catch (err) {
+      setUploadMsg(err.response?.data?.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+      e.target.value = ''; // reset input
+    }
+  };
 
   useEffect(() => {
     admin
@@ -98,6 +119,33 @@ const AdminOverview = () => {
         <Link to="/admin/chat" className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg text-sm font-medium hover:bg-slate-600">
           Moderate chat
         </Link>
+      </div>
+
+      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 mt-8">
+        <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+          <FileText className="w-5 h-5 text-emerald-400" />
+          Knowledge Base (AI Training)
+        </h3>
+        <p className="text-sm text-slate-400 mb-4">Upload PDFs to embed them into Pinecone for the AI Coach's RAG system.</p>
+        
+        <div className="flex items-center gap-4">
+          <label className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 cursor-pointer transition-colors ${uploading ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-600'}`}>
+            <UploadCloud className="w-4 h-4" />
+            {uploading ? 'Processing PDF...' : 'Upload PDF'}
+            <input 
+              type="file" 
+              accept=".pdf" 
+              className="hidden" 
+              onChange={handlePdfUpload}
+              disabled={uploading}
+            />
+          </label>
+          {uploadMsg && (
+            <span className={`text-sm ${uploadMsg.includes('Success') ? 'text-emerald-400' : 'text-red-400'}`}>
+              {uploadMsg}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

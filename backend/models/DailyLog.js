@@ -1,33 +1,29 @@
-import mongoose from 'mongoose';
+import { z } from 'zod';
 
-const dailyLogSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  date: {
-    type: Date,
-    required: true,
-    default: Date.now
-  },
-  foodItems: [{
-    foodId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'FoodItem'
-    },
-    servings: {
-      type: Number,
-      default: 1
-    }
-  }],
-  totals: {
-    calories: { type: Number, default: 0 },
-    protein: { type: Number, default: 0 },
-    carbs: { type: Number, default: 0 },
-    fats: { type: Number, default: 0 }
-  }
-}, { timestamps: true });
+export const EmbeddedFoodItemSchema = z.object({
+  foodId: z.string().nullable().optional(), // Reference if needed
+  name: z.string(),
+  calories: z.number(),
+  protein: z.number(),
+  carbs: z.number(),
+  fats: z.number(),
+  servings: z.number().default(1)
+});
 
-const DailyLog = mongoose.model('DailyLog', dailyLogSchema);
-export default DailyLog;
+export const DailyLogSchema = z.object({
+  userId: z.string(),
+  date: z.union([z.string(), z.date()]),
+  foodItems: z.array(EmbeddedFoodItemSchema).default([]),
+  totals: z.object({
+    calories: z.number().default(0),
+    protein: z.number().default(0),
+    carbs: z.number().default(0),
+    fats: z.number().default(0)
+  }).default({ calories: 0, protein: 0, carbs: 0, fats: 0 }),
+  createdAt: z.any().optional(),
+  updatedAt: z.any().optional()
+});
+
+export const validateDailyLog = (data) => {
+  return DailyLogSchema.parse(data);
+};

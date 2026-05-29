@@ -1,53 +1,22 @@
-import mongoose from 'mongoose';
+import { z } from 'zod';
 
-const userSchema = new mongoose.Schema({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  password: {
-    type: String,
-    required: true,
-  },
-  age: Number,
-  weight: Number,
-  height: Number,
-  healthGoals: {
-    type: String,
-    enum: ['Weight Loss', 'Muscle Gain', 'Maintenance'],
-    default: 'Maintenance'
-  },
-  restrictions: {
-    type: [String],
-    default: []
-  },
-  location: {
-    type: String,
-    default: 'UAE'
-  },
-  streakCount: {
-    type: Number,
-    default: 0
-  },
-  role: {
-    type: String,
-    enum: ['user', 'admin'],
-    default: 'user',
-  },
-  isDisabled: {
-    type: Boolean,
-    default: false,
-  },
-  pantry: {
-    type: [String],
-    default: []
-  },
-  targetCalories: {
-    type: Number,
-    default: 2000
-  },
-}, { timestamps: true });
+export const UserSchema = z.object({
+  email: z.string().email(),
+  age: z.number().nullish(),
+  weight: z.number().nullish(),
+  height: z.number().nullish(),
+  healthGoals: z.enum(['Weight Loss', 'Muscle Gain', 'Maintenance']).default('Maintenance'),
+  restrictions: z.array(z.string()).default([]),
+  location: z.string().default('UAE'),
+  streakCount: z.number().default(0),
+  role: z.enum(['user', 'admin']).default('user'),
+  isDisabled: z.boolean().default(false),
+  pantry: z.array(z.string()).default([]),
+  targetCalories: z.number().default(2000),
+  createdAt: z.any().optional(),
+  updatedAt: z.any().optional()
+});
 
-const User = mongoose.model('User', userSchema);
-export default User;
+export const validateUser = (data) => {
+  return UserSchema.parse(data);
+};

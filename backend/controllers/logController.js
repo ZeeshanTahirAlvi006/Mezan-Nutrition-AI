@@ -1,5 +1,5 @@
-import DailyLog from '../models/DailyLog.js';
-import FoodItem from '../models/FoodItem.js';
+import { db } from '../config/firebase.js';
+import { validateDailyLog } from '../models/DailyLog.js';
 import { recalculateStreak } from '../utils/streak.js';
 
 // @desc    Create or update daily log
@@ -15,61 +15,125 @@ const createDailyLog = async (req, res) => {
     if (isNaN(parsedDate.getTime())) {
       return res.status(400).json({ message: 'Invalid date format.' });
     }
-    const normalizedDate = parsedDate.setHours(0, 0, 0, 0);
+    // Normalize date to midnight ISO string for consistent querying
+    parsedDate.setHours(0, 0, 0, 0);
+    const dateString = parsedDate.toISOString();
 
     if (!foodItems || !Array.isArray(foodItems)) {
       return res.status(400).json({ message: 'foodItems must be an array.' });
     }
 
-    // Calculate totals
+    const embeddedFoodItems = [];
     let totalCalories = 0;
     let totalProtein = 0;
     let totalCarbs = 0;
     let totalFats = 0;
 
+    // Fetch food details from Firestore to embed in the log
     for (const item of foodItems) {
-      const food = await FoodItem.findById(item.foodId);
-      if (food) {
-        totalCalories += food.calories * item.servings;
-        totalProtein += (food.protein || 0) * item.servings;
-        totalCarbs += (food.carbs || 0) * item.servings;
-        totalFats += (food.fats || 0) * item.servings;
+      if (item.foodId) {
+        const foodDoc = await db.collection('foods').doc(item.foodId).get();
+        if (foodDoc.exists) {
+          const food = foodDoc.data();
+          const servings = Number(item.servings) || 1;
+          
+          embeddedFoodItems.push({
+            foodId: item.foodId,
+            name: food.name,
+            calories: Number(food.calories) || 0,
+            protein: Number(food.protein) || 0,
+            carbs: Number(food.carbs) || 0,
+            fats: Number(food.fats) || 0,
+            servings: servings
+          });
+
+          totalCalories += (food.calories || 0) * servings;
+          totalProtein += (food.protein || 0) * servings;
+          totalCarbs += (food.carbs || 0) * servings;
+          totalFats += (food.fats || 0) * servings;
+        }
+      } else if (item.name) {
+        // If the frontend already provides embedded data (e.g. from manual entry)
+        const servings = Number(item.servings) || 1;
+        embeddedFoodItems.push({
+          foodId: null,
+          name: item.name,
+          calories: Number(item.calories) || 0,
+          protein: Number(item.protein) || 0,
+          carbs: Number(item.carbs) || 0,
+          fats: Number(item.fats) || 0,
+          servings: servings
+        });
+        totalCalories += (item.calories || 0) * servings;
+        totalProtein += (item.protein || 0) * servings;
+        totalCarbs += (item.carbs || 0) * servings;
+        totalFats += (item.fats || 0) * servings;
       }
     }
 
     // Find if log already exists for this user and date
-    let log = await DailyLog.findOne({
-      userId: req.user._id,
-      date: normalizedDate
-    });
+    const logsRef = db.collection('dailyLogs');
+    const snapshot = await logsRef
+      .where('userId', '==', req.user.uid)
+      .where('date', '==', dateString)
+      .limit(1)
+      .get();
 
-    if (log) {
+    let logRef;
+    let logData;
+
+    if (!snapshot.empty) {
       // Update existing
-      log.foodItems = [...log.foodItems, ...foodItems];
-      log.totals.calories += totalCalories;
-      log.totals.protein += totalProtein;
-      log.totals.carbs += totalCarbs;
-      log.totals.fats += totalFats;
-      await log.save();
+      const doc = snapshot.docs[0];
+      logRef = doc.ref;
+      const existing = doc.data();
+      
+      logData = {
+        userId: req.user.uid,
+        date: dateString,
+        foodItems: [...(existing.foodItems || []), ...embeddedFoodItems],
+        totals: {
+          calories: (existing.totals?.calories || 0) + totalCalories,
+          protein: (existing.totals?.protein || 0) + totalProtein,
+          carbs: (existing.totals?.carbs || 0) + totalCarbs,
+          fats: (existing.totals?.fats || 0) + totalFats
+        },
+        createdAt: existing.createdAt || new Date(),
+        updatedAt: new Date()
+      };
     } else {
       // Create new
-      log = await DailyLog.create({
-        userId: req.user._id,
-        date: normalizedDate,
-        foodItems,
+      logRef = logsRef.doc(); // Auto-generate ID
+      logData = {
+        userId: req.user.uid,
+        date: dateString,
+        foodItems: embeddedFoodItems,
         totals: {
           calories: totalCalories,
           protein: totalProtein,
           carbs: totalCarbs,
           fats: totalFats
-        }
-      });
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
     }
 
-    await recalculateStreak(req.user._id);
+    const validatedLog = validateDailyLog(logData);
+    await logRef.set(validatedLog);
 
-    res.status(201).json(log);
+    await recalculateStreak(req.user.uid);
+
+    res.status(201).json({
+      _id: logRef.id,
+      ...validatedLog
+    });
   } catch (error) {
+    if (error.name === 'ZodError') {
+      console.error('Zod Validation Error:', JSON.stringify(error.errors, null, 2));
+      return res.status(400).json({ message: 'Validation Error', errors: error.errors });
+    }
+    console.error('Create Daily Log Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -82,19 +146,26 @@ const getDailyLog = async (req, res) => {
     if (isNaN(parsedDate.getTime())) {
       return res.status(400).json({ message: 'Invalid date format.' });
     }
-    const date = parsedDate.setHours(0, 0, 0, 0);
+    parsedDate.setHours(0, 0, 0, 0);
+    const dateString = parsedDate.toISOString();
 
-    const log = await DailyLog.findOne({
-      userId: req.user._id,
-      date: date
-    }).populate('foodItems.foodId');
+    const snapshot = await db.collection('dailyLogs')
+      .where('userId', '==', req.user.uid)
+      .where('date', '==', dateString)
+      .limit(1)
+      .get();
 
-    if (log) {
-      res.json(log);
+    if (!snapshot.empty) {
+      const doc = snapshot.docs[0];
+      res.json({
+        _id: doc.id,
+        ...doc.data()
+      });
     } else {
       res.json({ totals: { calories: 0, protein: 0, carbs: 0, fats: 0 }, foodItems: [] });
     }
   } catch (error) {
+    console.error('Get Daily Log Error:', error);
     res.status(500).json({ message: error.message });
   }
 };

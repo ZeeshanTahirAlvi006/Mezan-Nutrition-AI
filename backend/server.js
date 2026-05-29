@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import connectDB from './config/db.js';
+
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -18,6 +18,7 @@ import checkInRoutes from './routes/checkInRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import mealPlanRoutes from './routes/mealPlanRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import weatherRoutes from './routes/weatherRoutes.js';
 
 const app = express();
 
@@ -92,7 +93,7 @@ const mongoSanitize = (req, res, next) => {
 // Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 500, // Limit each IP to 500 requests per windowMs
   message: { message: 'Too many requests from this IP, please try again after 15 minutes' }
 });
 app.use('/api/', limiter);
@@ -112,12 +113,12 @@ const adminLimiter = rateLimit({
   message: { message: 'Too many admin requests, please try again later' },
 });
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(mongoSanitize);
 
 
-// Connect to Database
-connectDB();
+// Using Firebase Admin SDK for Database
 
 // Mount Routes
 app.use('/api/users', userRoutes);
@@ -127,6 +128,7 @@ app.use('/api/checkin', checkInRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/meal-plan', mealPlanRoutes);
 app.use('/api/admin', adminLimiter, adminRoutes);
+app.use('/api/weather', weatherRoutes);
 
 // Global Error Handler (to prevent leaking stack traces)
 app.use((err, req, res, next) => {

@@ -1,29 +1,28 @@
-import DailyLog from '../models/DailyLog.js';
-import User from '../models/User.js';
+import { db } from '../config/firebase.js';
 
-/**
- * Recalculates and updates the user's consecutive food logging streak.
- * A streak is active if the user has logged food today or yesterday.
- * 
- * @param {string} userId - The user's ID
- * @returns {Promise<number>} The updated streak count
- */
 export const recalculateStreak = async (userId) => {
   try {
-    const user = await User.findById(userId);
-    if (!user) return 0;
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists) return 0;
+    const userData = userDoc.data();
 
-    // Fetch all logs for the user sorted by date descending
-    const logs = await DailyLog.find({ userId }).sort({ date: -1 });
-    if (logs.length === 0) {
-      if (user.streakCount !== 0) {
-        user.streakCount = 0;
-        await user.save();
+    // Fetch all logs for the user WITHOUT orderBy to avoid composite index requirements
+    const logsSnap = await db.collection('dailyLogs').where('userId', '==', userId).get();
+    
+    if (logsSnap.empty) {
+      if (userData.streakCount !== 0) {
+        await userRef.update({ streakCount: 0 });
       }
       return 0;
     }
 
-    // Extract unique normalized dates (at 00:00:00 midnight local time format in DB)
+    const logs = logsSnap.docs.map(d => d.data());
+    // Sort logs by date descending in-memory
+    logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // Extract unique normalized dates
     const logDates = [...new Set(logs.map(log => new Date(log.date).setHours(0, 0, 0, 0)))];
 
     const today = new Date().setHours(0, 0, 0, 0);
@@ -33,9 +32,8 @@ export const recalculateStreak = async (userId) => {
 
     // If the most recent log is older than yesterday, the streak has been broken
     if (mostRecentLogDate < yesterday) {
-      if (user.streakCount !== 0) {
-        user.streakCount = 0;
-        await user.save();
+      if (userData.streakCount !== 0) {
+        await userRef.update({ streakCount: 0 });
       }
       return 0;
     }
@@ -55,14 +53,13 @@ export const recalculateStreak = async (userId) => {
     }
 
     // Update and save if streakCount changed
-    if (user.streakCount !== streak) {
-      user.streakCount = streak;
-      await user.save();
+    if (userData.streakCount !== streak) {
+      await userRef.update({ streakCount: streak });
     }
 
     return streak;
   } catch (error) {
-    console.error('Error recalculating streak:', error);
-    return 0;
+    console.error('Recalculate Streak Error (suppressed):', error.message);
+    return 0; // Prevent parent failure
   }
 };

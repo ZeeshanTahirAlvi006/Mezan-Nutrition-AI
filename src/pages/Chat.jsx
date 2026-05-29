@@ -16,6 +16,7 @@ const Chat = () => {
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const [selectedImage, setSelectedImage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [agentState, setAgentState] = useState(null);
   const [debugMode, setDebugMode] = useState(false);
@@ -44,33 +45,53 @@ const Chat = () => {
 
   // Initialize Session
   useEffect(() => {
-    const initSession = async () => {
+    const initSession = async (attemptId = null) => {
       try {
         setLoading(true);
-        // 1. Try URL param, then localStorage, then new session
-        const targetId = id || localStorage.getItem("lastSessionId");
+        // 1. Try provided ID, then URL param, then localStorage
+        const targetId = attemptId || id || localStorage.getItem("lastSessionId");
 
-        const { data } = await client.post("/api/chat/session", {
-          sessionId: targetId,
-        });
-        setSessionId(data._id);
-        localStorage.setItem("lastSessionId", data._id);
+        try {
+          const { data } = await client.post("/api/chat/session", {
+            sessionId: targetId,
+          });
+          setSessionId(data._id);
+          localStorage.setItem("lastSessionId", data._id);
 
-        // 2. Load existing messages if this is a resumed session
-        const { data: history } = await client.get(
-          `/api/chat/session/${data._id}/messages`,
-        );
-        if (history && history.length > 0) {
-          setMessages(history);
-        } else {
-          setMessages([
-            {
-              _id: "welcome",
-              role: "assistant",
-              content:
-                "Hello! I'm your Mezan AI Coach. How can I help you balance your nutrition today?",
-            },
-          ]);
+          // 2. Load existing messages if this is a resumed session
+          const { data: history } = await client.get(
+            `/api/chat/session/${data._id}/messages`,
+          );
+          if (history && history.length > 0) {
+            setMessages(history);
+          } else {
+            setMessages([
+              {
+                _id: "welcome",
+                role: "assistant",
+                content:
+                  "Hello! I'm your Mezan AI Coach. How can I help you balance your nutrition today?",
+              },
+            ]);
+          }
+        } catch (apiError) {
+          if (apiError.response?.status === 404 && targetId) {
+            console.log("Old session not found (404), starting a new one automatically.");
+            localStorage.removeItem("lastSessionId");
+            // Instead of throwing, fall back to a fresh session
+            const { data } = await client.post("/api/chat/session", { new: true });
+            setSessionId(data._id);
+            localStorage.setItem("lastSessionId", data._id);
+            setMessages([
+              {
+                _id: "welcome",
+                role: "assistant",
+                content: "Hello! I'm your Mezan AI Coach. How can I help you balance your nutrition today?",
+              },
+            ]);
+          } else {
+            throw apiError;
+          }
         }
       } catch (error) {
         console.error("Failed to init session", error);
@@ -180,7 +201,10 @@ const Chat = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    executeAgentLoop(input);
+    if (!input.trim() && !selectedImage) return;
+    const textToSend = input.trim() || "I have uploaded an image.";
+    executeAgentLoop(textToSend, selectedImage);
+    setSelectedImage(null);
   };
 
   const startNewSession = async () => {
@@ -362,6 +386,20 @@ const Chat = () => {
             ))}
           </div>
 
+          {/* Image Preview */}
+          {selectedImage && (
+            <div className="relative mb-3 inline-block ml-1">
+              <img src={selectedImage} alt="Selected preview" className="h-20 w-20 object-cover rounded-xl shadow-md border-2 border-primary/20" />
+              <button
+                type="button"
+                onClick={() => setSelectedImage(null)}
+                className="absolute -top-2 -right-2 bg-error text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg hover:scale-105 transition-transform cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[14px]">close</span>
+              </button>
+            </div>
+          )}
+
           {/* Input Box */}
           <form onSubmit={handleSubmit} className="relative flex items-center gap-2">
             {/* Image Upload */}
@@ -383,10 +421,7 @@ const Chat = () => {
                   if (file) {
                     const reader = new FileReader();
                     reader.onloadend = () => {
-                      executeAgentLoop(
-                        "I have uploaded an image.",
-                        reader.result,
-                      );
+                      setSelectedImage(reader.result);
                     };
                     reader.readAsDataURL(file);
                   }
@@ -408,7 +443,7 @@ const Chat = () => {
             {/* Send Button */}
             <button
               type="submit"
-              disabled={loading || !input.trim() || !sessionId}
+              disabled={loading || (!input.trim() && !selectedImage) || !sessionId}
               className="absolute right-1.5 w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm hover:opacity-90 transition-opacity active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <span className="material-symbols-outlined fill-icon text-[20px]">send</span>

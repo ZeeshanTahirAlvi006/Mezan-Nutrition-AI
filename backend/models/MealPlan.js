@@ -1,37 +1,32 @@
-import mongoose from 'mongoose';
+import { z } from 'zod';
 
-const mealItemSchema = new mongoose.Schema({
-  foodName: { type: String, required: true },
-  calories: { type: Number, required: true },
-  protein: { type: Number, required: true },
-  carbs: { type: Number, required: true },
-  fats: { type: Number, required: true },
-  status: { 
-    type: String, 
-    enum: ['active', 'replaced'], 
-    default: 'active' 
-  }
+export const MealItemSchema = z.object({
+  foodName: z.string(),
+  calories: z.number(),
+  protein: z.number(),
+  carbs: z.number(),
+  fats: z.number(),
+  status: z.enum(['active', 'replaced']).default('active')
 });
 
-const dailyPlanSchema = new mongoose.Schema({
-  date: { type: Date, required: true },
-  totalCalories: { type: Number, required: true },
-  meals: {
-    Breakfast: [mealItemSchema],
-    Lunch: [mealItemSchema],
-    Dinner: [mealItemSchema],
-    Snacks: [mealItemSchema]
-  }
+export const DailyPlanSchema = z.object({
+  date: z.union([z.string(), z.date()]),
+  totalCalories: z.number(),
+  meals: z.object({
+    Breakfast: z.array(MealItemSchema).default([]),
+    Lunch: z.array(MealItemSchema).default([]),
+    Dinner: z.array(MealItemSchema).default([]),
+    Snacks: z.array(MealItemSchema).default([])
+  })
 });
 
-const mealPlanSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  days: [dailyPlanSchema]
-}, { timestamps: true });
+export const MealPlanSchema = z.object({
+  userId: z.string(), // Firebase UID or Firestore doc ID
+  days: z.array(DailyPlanSchema).default([]),
+  createdAt: z.date().optional(),
+  updatedAt: z.date().optional()
+});
 
-const MealPlan = mongoose.model('MealPlan', mealPlanSchema);
-export default MealPlan;
+export const validateMealPlan = (data) => {
+  return MealPlanSchema.parse(data);
+};
