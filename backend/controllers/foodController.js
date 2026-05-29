@@ -1,5 +1,6 @@
 import { db } from '../config/firebase.js';
 import { searchUSDAFoods } from '../services/usdaService.js';
+import { getCachedFoods } from '../utils/foodCache.js';
 
 // @desc    Search food items
 // @route   GET /api/food/search
@@ -7,25 +8,29 @@ const searchFood = async (req, res) => {
   try {
     const { q, country } = req.query;
 
-    let queryRef = db.collection('foods');
-
-    // Firestore doesn't support complex substring search natively.
-    // If country is provided, we can filter by country at the DB level.
-    if (country !== undefined) {
-      if (typeof country !== 'string') {
-        return res.status(400).json({ message: 'Country parameter must be a string' });
-      }
-      queryRef = queryRef.where('country', '==', country.trim());
+    if (country !== undefined && typeof country !== 'string') {
+      return res.status(400).json({ message: 'Country parameter must be a string' });
+    }
+    if (q !== undefined && typeof q !== 'string') {
+      return res.status(400).json({ message: 'Query parameter q must be a string' });
     }
 
-    const snapshot = await queryRef.get();
-    let localFoods = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+    // Run local cached foods retrieval and USDA search concurrently
+    const [allLocalFoods, usdaFoods] = await Promise.all([
+      getCachedFoods(),
+      q && q.trim().length >= 2 ? searchUSDAFoods(q.trim(), 25) : Promise.resolve([])
+    ]);
 
-    // Apply regex search in memory since dataset is small.
+    let localFoods = allLocalFoods;
+
+    // Filter by country in memory
+    if (country !== undefined) {
+      const targetCountry = country.trim().toLowerCase();
+      localFoods = localFoods.filter(food => (food.country || '').trim().toLowerCase() === targetCountry);
+    }
+
+    // Filter by query in memory
     if (q !== undefined) {
-      if (typeof q !== 'string') {
-        return res.status(400).json({ message: 'Query parameter q must be a string' });
-      }
       const safeQ = q.trim().toLowerCase();
       if (safeQ) {
         const keywords = safeQ.split(/\s+/);
@@ -34,12 +39,6 @@ const searchFood = async (req, res) => {
           return keywords.every(word => foodName.includes(word));
         });
       }
-    }
-
-    // ── Dynamic USDA FDC API Search Integration ──
-    let usdaFoods = [];
-    if (q && q.trim().length >= 2) {
-      usdaFoods = await searchUSDAFoods(q.trim(), 25);
     }
 
     // Merge custom local foods with verified USDA database items, preventing duplicates

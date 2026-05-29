@@ -1,6 +1,7 @@
 import { db } from '../config/firebase.js';
 import { validateDailyLog } from '../models/DailyLog.js';
 import { recalculateStreak } from '../utils/streak.js';
+import { getCachedFoods } from '../utils/foodCache.js';
 
 // @desc    Create or update daily log
 // @route   POST /api/logs/daily
@@ -29,12 +30,15 @@ const createDailyLog = async (req, res) => {
     let totalCarbs = 0;
     let totalFats = 0;
 
-    // Fetch food details from Firestore to embed in the log
+    // Fetch cached foods to perform extremely fast, zero-IO in-memory lookups
+    const cachedFoods = await getCachedFoods();
+    const foodMap = new Map(cachedFoods.map(f => [f._id, f]));
+
+    // Fetch food details from cache/Firestore to embed in the log
     for (const item of foodItems) {
       if (item.foodId) {
-        const foodDoc = await db.collection('foods').doc(item.foodId).get();
-        if (foodDoc.exists) {
-          const food = foodDoc.data();
+        const food = foodMap.get(item.foodId);
+        if (food) {
           const servings = Number(item.servings) || 1;
           
           embeddedFoodItems.push({
@@ -51,6 +55,28 @@ const createDailyLog = async (req, res) => {
           totalProtein += (food.protein || 0) * servings;
           totalCarbs += (food.carbs || 0) * servings;
           totalFats += (food.fats || 0) * servings;
+        } else {
+          // Graceful fallback if a food item is newly created and not yet in the cache
+          const foodDoc = await db.collection('foods').doc(item.foodId).get();
+          if (foodDoc.exists) {
+            const foodData = foodDoc.data();
+            const servings = Number(item.servings) || 1;
+            
+            embeddedFoodItems.push({
+              foodId: item.foodId,
+              name: foodData.name,
+              calories: Number(foodData.calories) || 0,
+              protein: Number(foodData.protein) || 0,
+              carbs: Number(foodData.carbs) || 0,
+              fats: Number(foodData.fats) || 0,
+              servings: servings
+            });
+
+            totalCalories += (foodData.calories || 0) * servings;
+            totalProtein += (foodData.protein || 0) * servings;
+            totalCarbs += (foodData.carbs || 0) * servings;
+            totalFats += (foodData.fats || 0) * servings;
+          }
         }
       } else if (item.name) {
         // If the frontend already provides embedded data (e.g. from manual entry)
@@ -122,7 +148,8 @@ const createDailyLog = async (req, res) => {
     const validatedLog = validateDailyLog(logData);
     await logRef.set(validatedLog);
 
-    await recalculateStreak(req.user.uid);
+    // Call recalculateStreak non-blocking/in background to optimize latency
+    recalculateStreak(req.user.uid).catch(err => console.error("Streak update error:", err));
 
     res.status(201).json({
       _id: logRef.id,
@@ -170,4 +197,55 @@ const getDailyLog = async (req, res) => {
   }
 };
 
-export { createDailyLog, getDailyLog };
+// @desc    Get daily logs for a weekly/date range
+// @route   GET /api/logs/weekly
+const getWeeklyLogs = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    let start = new Date();
+    start.setDate(start.getDate() - 6); // default to last 7 days
+    start.setHours(0, 0, 0, 0);
+    
+    let end = new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    if (startDate) {
+      const parsedStart = new Date(startDate);
+      if (!isNaN(parsedStart.getTime())) {
+        start = parsedStart;
+        start.setHours(0, 0, 0, 0);
+      }
+    }
+    
+    if (endDate) {
+      const parsedEnd = new Date(endDate);
+      if (!isNaN(parsedEnd.getTime())) {
+        end = parsedEnd;
+        end.setHours(23, 59, 59, 999);
+      }
+    }
+    
+    const startStr = start.toISOString();
+    const endStr = end.toISOString();
+    
+    // Fetch logs using userId only to ensure no Firestore composite indexes are required, then filter in memory.
+    const snapshot = await db.collection('dailyLogs')
+      .where('userId', '==', req.user.uid)
+      .get();
+      
+    const logs = snapshot.docs
+      .map(doc => ({ _id: doc.id, ...doc.data() }))
+      .filter(log => log.date >= startStr && log.date <= endStr);
+    
+    // Sort ascending by date
+    logs.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    res.json(logs);
+  } catch (error) {
+    console.error('Get Weekly Logs Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export { createDailyLog, getDailyLog, getWeeklyLogs };

@@ -66,25 +66,25 @@ const WeeklyTrendChart = () => {
   const fetchWeekData = async () => {
     try {
       const dates = getLastNDates(7);
-      const requests = dates.map((d) =>
-        client
-          .get(`/api/logs/daily/${d.toISOString()}`)
-          .then((res) => res.data)
-          .catch(() => ({
-            totals: { calories: 0, protein: 0, carbs: 0, fats: 0 },
-          }))
-      );
+      const startDate = dates[0].toISOString();
+      const endDate = dates[dates.length - 1].toISOString();
 
-      const results = await Promise.all(requests);
+      const res = await client.get(`/api/logs/weekly?startDate=${startDate}&endDate=${endDate}`);
+      const logs = res.data || [];
 
-      const chartData = dates.map((d, i) => ({
-        day: SHORT_DAY[d.getDay()],
-        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        calories: Math.round(results[i]?.totals?.calories || 0),
-        protein: Math.round(results[i]?.totals?.protein || 0),
-        carbs: Math.round(results[i]?.totals?.carbs || 0),
-        fats: Math.round(results[i]?.totals?.fats || 0),
-      }));
+      const chartData = dates.map((d) => {
+        const dateString = d.toISOString();
+        const foundLog = logs.find((log) => log.date === dateString);
+        
+        return {
+          day: SHORT_DAY[d.getDay()],
+          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          calories: Math.round(foundLog?.totals?.calories || 0),
+          protein: Math.round(foundLog?.totals?.protein || 0),
+          carbs: Math.round(foundLog?.totals?.carbs || 0),
+          fats: Math.round(foundLog?.totals?.fats || 0),
+        };
+      });
 
       setData(chartData);
     } catch (err) {

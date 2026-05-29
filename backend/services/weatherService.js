@@ -42,8 +42,14 @@ const mapWmoCode = (code) => {
 };
 
 // In-memory cache for weather data
-const weatherCache = {};
-const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+export const weatherCache = {};
+export const CACHE_DURATION = 60 * 60 * 1000; // 60 minutes
+
+export const getWeatherCached = (locationString) => {
+  const normalizedKey = (locationString || 'UAE').trim().toLowerCase();
+  const cached = weatherCache[normalizedKey];
+  return cached ? cached.data : null;
+};
 
 /**
  * Fetch latitude/longitude for a given city/country string from Open-Meteo Geocoding API.
@@ -53,16 +59,16 @@ const geocodeLocation = async (location) => {
   try {
     const cleanLocation = location ? location.trim() : 'UAE';
     console.log(`[Weather Service] Geocoding location: "${cleanLocation}"`);
-    
+
     const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cleanLocation)}&count=1`;
     const response = await fetch(geocodeUrl);
-    
+
     if (!response.ok) {
       throw new Error(`Geocoding server returned status ${response.status}`);
     }
-    
+
     const result = await response.json();
-    
+
     if (result.results && result.results.length > 0) {
       const match = result.results[0];
       return {
@@ -73,12 +79,12 @@ const geocodeLocation = async (location) => {
         timezone: match.timezone || 'auto'
       };
     }
-    
+
     console.warn(`[Weather Service] No geocoding results for "${cleanLocation}". Using default (Dubai, UAE).`);
   } catch (error) {
     console.error(`[Weather Service] Geocoding error for "${location}":`, error.message);
   }
-  
+
   // Return default fallback (Dubai, UAE)
   return {
     lat: 25.07725,
@@ -95,33 +101,33 @@ const geocodeLocation = async (location) => {
  */
 export const getWeatherByLocation = async (locationString) => {
   const normalizedKey = (locationString || 'UAE').trim().toLowerCase();
-  
+
   // 1. Check cache
   const cached = weatherCache[normalizedKey];
   if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
     console.log(`[Weather Service] Cache HIT for "${normalizedKey}"`);
     return cached.data;
   }
-  
+
   console.log(`[Weather Service] Cache MISS for "${normalizedKey}". Fetching fresh data...`);
-  
+
   // 2. Geocode location to lat/lon
   const geo = await geocodeLocation(locationString);
-  
+
   try {
     // 3. Fetch weather from Open-Meteo
     const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_sum&timezone=${geo.timezone}`;
-    
+
     const response = await fetch(forecastUrl);
     if (!response.ok) {
       throw new Error(`Open-Meteo returned status ${response.status}`);
     }
-    
+
     const rawData = await response.json();
-    
+
     // 4. Transform raw data into a beautiful, structured format for the UI and AI
     const currentMapped = mapWmoCode(rawData.current.weather_code);
-    
+
     const weatherData = {
       location: {
         name: geo.name,
@@ -158,17 +164,17 @@ export const getWeatherByLocation = async (locationString) => {
         };
       })
     };
-    
+
     // 5. Store in cache
     weatherCache[normalizedKey] = {
       data: weatherData,
       timestamp: Date.now()
     };
-    
+
     return weatherData;
   } catch (error) {
     console.error(`[Weather Service] Error fetching weather for "${locationString}":`, error.message);
-    
+
     // Fallback data structure if complete service fails, ensuring the app never crashes
     const defaultMapped = mapWmoCode(0);
     return {

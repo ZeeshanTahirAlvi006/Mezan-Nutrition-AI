@@ -4,6 +4,7 @@ import { generateChatResponse } from '../services/aiService.js';
 import { getWeatherByLocation } from '../services/weatherService.js';
 import { fetchUSDANutrition } from '../services/usdaService.js';
 import crypto from 'crypto';
+import { getCachedFoods } from '../utils/foodCache.js';
 
 // In-memory fallback chat session cache for zero-downtime during Firestore quota exhaustion
 const localChatCache = new Map();
@@ -52,41 +53,39 @@ const lookupFoodLocalOrUSDA = async (foodName) => {
   
   // Step 1: Search local Firestore foods collection
   try {
-    const foodsRef = db.collection('foods');
-    const snapshot = await foodsRef.get();
+    const foods = await getCachedFoods();
     
     // Try exact name match first
-    let localMatch = snapshot.docs.find(doc => {
-      const name = (doc.data().name || '').toLowerCase();
+    let localMatch = foods.find(food => {
+      const name = (food.name || '').toLowerCase();
       return name === cleanName;
     });
     
     // If no exact match, try substring/keyword match
     if (!localMatch) {
       const keywords = cleanName.split(/\s+/).filter(w => w.length > 2);
-      localMatch = snapshot.docs.find(doc => {
-        const name = (doc.data().name || '').toLowerCase();
+      localMatch = foods.find(food => {
+        const name = (food.name || '').toLowerCase();
         return keywords.length > 0 && keywords.every(kw => name.includes(kw));
       });
     }
     
     // If still no match, try partial inclusion
     if (!localMatch) {
-      localMatch = snapshot.docs.find(doc => {
-        const name = (doc.data().name || '').toLowerCase();
+      localMatch = foods.find(food => {
+        const name = (food.name || '').toLowerCase();
         return name.includes(cleanName) || cleanName.includes(name.split(' ')[0]);
       });
     }
     
     if (localMatch) {
-      const data = localMatch.data();
-      console.log(`[Food Lookup] ✅ Found LOCAL database match for "${foodName}": "${data.name}"`);
+      console.log(`[Food Lookup] ✅ Found LOCAL database match for "${foodName}": "${localMatch.name}"`);
       return {
-        name: data.name,
-        calories: Number(data.calories) || 0,
-        protein: Number(data.protein) || 0,
-        carbs: Number(data.carbs) || 0,
-        fats: Number(data.fats) || 0
+        name: localMatch.name,
+        calories: Number(localMatch.calories) || 0,
+        protein: Number(localMatch.protein) || 0,
+        carbs: Number(localMatch.carbs) || 0,
+        fats: Number(localMatch.fats) || 0
       };
     }
   } catch (error) {
@@ -574,8 +573,7 @@ const executeTool = async (req, res) => {
 
       let foods = [];
       try {
-        const snapshot = await db.collection('foods').get();
-        foods = snapshot.docs.map(doc => doc.data());
+        foods = await getCachedFoods();
       } catch (dbErr) {
         console.error("Firestore error in search_food_database (using local fallback):", dbErr.message);
         foods = MOCK_FOODS;

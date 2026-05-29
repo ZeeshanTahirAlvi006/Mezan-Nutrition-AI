@@ -1,5 +1,15 @@
 import { auth, db } from '../config/firebase.js';
 
+const userCache = new Map();
+const CACHE_TTL = 60 * 1000; // 60 seconds
+
+const invalidateUserCache = (uid) => {
+  if (uid) {
+    userCache.delete(uid);
+    console.log(`[User Cache] Invalidated cache for UID: ${uid}`);
+  }
+};
+
 const protect = async (req, res, next) => {
   let token;
 
@@ -15,13 +25,26 @@ const protect = async (req, res, next) => {
       
       // Fetch user profile from Firestore with a graceful fallback for quota exhaustion or DB offline
       try {
-        const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+        const cached = userCache.get(decodedToken.uid);
+        const now = Date.now();
         
-        if (!userDoc.exists) {
-          // User is authenticated in Firebase but doesn't have a profile in our DB yet
-          req.user = { uid: decodedToken.uid, email: decodedToken.email };
+        if (cached && now - cached.timestamp < CACHE_TTL) {
+          req.user = cached.user;
+          console.log(`[User Cache] Cache hit for UID: ${decodedToken.uid}`);
         } else {
-          req.user = { uid: decodedToken.uid, ...userDoc.data() };
+          const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+          let userData;
+          
+          if (!userDoc.exists) {
+            // User is authenticated in Firebase but doesn't have a profile in our DB yet
+            userData = { uid: decodedToken.uid, email: decodedToken.email };
+          } else {
+            userData = { uid: decodedToken.uid, ...userDoc.data() };
+          }
+          
+          userCache.set(decodedToken.uid, { user: userData, timestamp: now });
+          req.user = userData;
+          console.log(`[User Cache] Cache miss & populate for UID: ${decodedToken.uid}`);
         }
       } catch (firestoreError) {
         console.error("Firestore database error (falling back to decoded token):", firestoreError.message);
@@ -50,5 +73,5 @@ const protect = async (req, res, next) => {
   }
 };
 
-export { protect };
+export { protect, invalidateUserCache };
 

@@ -13,28 +13,40 @@ const FoodSearch = ({ onAddFood }) => {
     name: '', calories: '', protein: '', carbs: '', fats: ''
   });
 
-  // Dynamic Search Effect (Debounced)
+  // Dynamic Search Effect (Debounced with AbortController)
   useEffect(() => {
+    const controller = new AbortController();
+
     const delayDebounceFn = setTimeout(() => {
       if (query.trim().length >= 2) {
-        performSearch();
+        performSearch(query, controller.signal);
       } else {
         setResults([]);
       }
-    }, 300);
+    }, 500);
 
-    return () => clearTimeout(delayDebounceFn);
+    return () => {
+      clearTimeout(delayDebounceFn);
+      controller.abort();
+    };
   }, [query]);
 
-  const performSearch = async () => {
+  const performSearch = async (searchQuery, signal) => {
     setLoading(true);
     try {
-      const { data } = await client.get(`/api/food/search?q=${query}`);
+      const { data } = await client.get(`/api/food/search?q=${searchQuery}`, { signal });
       setResults(data);
     } catch (err) {
-      console.error(err);
+      if (err.name === 'CanceledError' || err.message === 'canceled') {
+        console.log("Search request cancelled:", searchQuery);
+      } else {
+        console.error(err);
+      }
+    } finally {
+      if (!signal.aborted) {
+        setLoading(false);
+      }
     }
-    setLoading(false);
   };
 
   const handleCustomSubmit = async (e) => {
