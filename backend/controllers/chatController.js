@@ -44,6 +44,76 @@ const LOCAL_NUTRITION_DB = {
   water: { name: 'Water', calories: 0, protein: 0, carbs: 0, fats: 0, unit: 'ml', isWater: true }
 };
 
+// ── UNIFIED LOCAL-FIRST FOOD LOOKUP ──
+// Searches our Firestore database first, then falls back to USDA FDC API
+const lookupFoodLocalOrUSDA = async (foodName) => {
+  if (!foodName) return null;
+  const cleanName = foodName.trim().toLowerCase();
+  
+  // Step 1: Search local Firestore foods collection
+  try {
+    const foodsRef = db.collection('foods');
+    const snapshot = await foodsRef.get();
+    
+    // Try exact name match first
+    let localMatch = snapshot.docs.find(doc => {
+      const name = (doc.data().name || '').toLowerCase();
+      return name === cleanName;
+    });
+    
+    // If no exact match, try substring/keyword match
+    if (!localMatch) {
+      const keywords = cleanName.split(/\s+/).filter(w => w.length > 2);
+      localMatch = snapshot.docs.find(doc => {
+        const name = (doc.data().name || '').toLowerCase();
+        return keywords.length > 0 && keywords.every(kw => name.includes(kw));
+      });
+    }
+    
+    // If still no match, try partial inclusion
+    if (!localMatch) {
+      localMatch = snapshot.docs.find(doc => {
+        const name = (doc.data().name || '').toLowerCase();
+        return name.includes(cleanName) || cleanName.includes(name.split(' ')[0]);
+      });
+    }
+    
+    if (localMatch) {
+      const data = localMatch.data();
+      console.log(`[Food Lookup] ✅ Found LOCAL database match for "${foodName}": "${data.name}"`);
+      return {
+        name: data.name,
+        calories: Number(data.calories) || 0,
+        protein: Number(data.protein) || 0,
+        carbs: Number(data.carbs) || 0,
+        fats: Number(data.fats) || 0
+      };
+    }
+  } catch (error) {
+    console.error(`[Food Lookup] Local database lookup failed for "${foodName}":`, error.message);
+  }
+  
+  // Step 2: Fallback to USDA FDC API
+  console.log(`[Food Lookup] No local match for "${foodName}". Querying USDA FDC API...`);
+  try {
+    const usdaItem = await fetchUSDANutrition(foodName);
+    if (usdaItem) {
+      console.log(`[Food Lookup] ✅ Found USDA match for "${foodName}": "${usdaItem.name}"`);
+      return {
+        name: usdaItem.name,
+        calories: usdaItem.calories,
+        protein: usdaItem.protein,
+        carbs: usdaItem.carbs,
+        fats: usdaItem.fats
+      };
+    }
+  } catch (error) {
+    console.error(`[Food Lookup] USDA lookup failed for "${foodName}":`, error.message);
+  }
+  
+  return null;
+};
+
 // ── LOCAL NLP FALLBACK PARSER ──
 const parseMessageLocally = async (text) => {
   const clean = (text || '').toLowerCase().trim();
@@ -80,21 +150,16 @@ const parseMessageLocally = async (text) => {
             }
           }
           
-          // Query USDA in real-time for highly precise clinical numbers
-          let usdaItem = null;
-          try {
-            usdaItem = await fetchUSDANutrition(item.name);
-          } catch (usdaErr) {
-            console.warn(`[Local Fallback] USDA lookup failed for "${item.name}" (falling back to local DB):`, usdaErr.message);
-          }
+          // Query local Firestore DB first, then USDA as fallback
+          const lookedUp = await lookupFoodLocalOrUSDA(item.name);
 
-          if (usdaItem) {
+          if (lookedUp) {
             detectedFoods.push({
-              name: usdaItem.name,
-              calories: usdaItem.calories,
-              protein: usdaItem.protein,
-              carbs: usdaItem.carbs,
-              fats: usdaItem.fats,
+              name: lookedUp.name,
+              calories: lookedUp.calories,
+              protein: lookedUp.protein,
+              carbs: lookedUp.carbs,
+              fats: lookedUp.fats,
               servings
             });
           } else {
@@ -111,12 +176,8 @@ const parseMessageLocally = async (text) => {
     if (ateMatch) {
       const genericFood = ateMatch[1].replace(/(breakfast|lunch|dinner|snack|today)/g, '').trim();
       if (genericFood && genericFood.length > 2) {
-        let usdaItem = null;
-        try {
-          usdaItem = await fetchUSDANutrition(genericFood);
-        } catch (usdaErr) {
-          console.warn(`[Local Fallback] USDA lookup failed for generic "${genericFood}":`, usdaErr.message);
-        }
+        // Query local Firestore DB first, then USDA as fallback
+        const usdaItem = await lookupFoodLocalOrUSDA(genericFood);
 
         if (usdaItem) {
           detectedFoods.push({
@@ -667,21 +728,16 @@ const executeTool = async (req, res) => {
       let finalCarbs = carbs;
       let finalFats = fats;
       
-      // Cross-verify with USDA FDC API for absolute clinical precision
-      let usdaItem = null;
-      try {
-        usdaItem = await fetchUSDANutrition(name);
-      } catch (usdaErr) {
-        console.warn(`[Execute Tool] USDA cross-verification failed for "${name}":`, usdaErr.message);
-      }
+      // Cross-verify with local Firestore DB first, then USDA as fallback
+      const verifiedItem = await lookupFoodLocalOrUSDA(name);
 
-      if (usdaItem) {
-        console.log(`[Execute Tool] Cross-verified "${name}" with USDA:`, usdaItem);
-        finalName = usdaItem.name;
-        finalCalories = usdaItem.calories;
-        finalProtein = usdaItem.protein;
-        finalCarbs = usdaItem.carbs;
-        finalFats = usdaItem.fats;
+      if (verifiedItem) {
+        console.log(`[Execute Tool] Cross-verified "${name}" with:`, verifiedItem.name);
+        finalName = verifiedItem.name;
+        finalCalories = verifiedItem.calories;
+        finalProtein = verifiedItem.protein;
+        finalCarbs = verifiedItem.carbs;
+        finalFats = verifiedItem.fats;
       }
 
       let parsedDate = new Date();
