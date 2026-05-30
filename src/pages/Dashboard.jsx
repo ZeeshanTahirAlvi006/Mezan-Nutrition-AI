@@ -59,7 +59,15 @@ const Dashboard = () => {
     try {
       const payload = {
         date: new Date().toISOString(),
-        foodItems: [{ foodId: food._id, servings: 1 }],
+        foodItems: [{ 
+          foodId: food._id || null,
+          name: food.name,
+          calories: Number(food.calories) || 0,
+          protein: Number(food.protein) || 0,
+          carbs: Number(food.carbs) || 0,
+          fats: Number(food.fats) || 0,
+          servings: 1 
+        }],
       };
       await client.post("/api/logs/daily", payload);
       fetchTodayLog();
@@ -87,6 +95,9 @@ const Dashboard = () => {
         content: text,
       });
 
+      let logSuccess = false;
+      let loggedFoodName = "";
+
       // 3. If the AI wants to call a tool (like log_meal), execute it
       const toolCalls = aiReply.toolCalls || [];
       for (const tc of toolCalls) {
@@ -108,9 +119,19 @@ const Dashboard = () => {
           toolArgs,
         });
 
+        // Verify if tool executed successfully without errors
+        const isSuccess = toolResult.result && !toolResult.result.startsWith("Error") && !toolResult.result.startsWith("Failed");
+
         // Intercept log_water_intake to sync with local hydration state
-        if (tc.function.name === "log_water_intake" && toolArgs.amount_ml) {
+        if (tc.function.name === "log_water_intake" && toolArgs.amount_ml && isSuccess) {
+          logSuccess = true;
+          loggedFoodName = `${toolArgs.amount_ml}ml Water`;
           handleAddWater(Number(toolArgs.amount_ml));
+        }
+
+        if (tc.function.name === "log_meal" && isSuccess) {
+          logSuccess = true;
+          loggedFoodName = toolArgs.name || "meal";
         }
 
         // Send tool result back to AI for final confirmation message
@@ -127,13 +148,19 @@ const Dashboard = () => {
       await fetchTodayLog();
       refreshUser();
 
-      setToastMessage(
-        toolCalls.length > 0
-          ? "🎤 Voice log saved successfully!"
-          : "Message sent to AI Coach."
-      );
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 4000);
+      if (toolCalls.length > 0 && logSuccess) {
+        setToastMessage(`🎤 Logged successfully: ${loggedFoodName}!`);
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 4000);
+      } else {
+        // Did not match or failed to log: inform user and redirect to chat to log separately
+        setToastMessage("⚠️ Could not verify food. Opening AI Coach to log ingredients...");
+        setShowToast(true);
+        setTimeout(() => {
+          setShowToast(false);
+          navigate(`/chat/${sessionId}`);
+        }, 3000);
+      }
     } catch (err) {
       console.error("[Voice Log] Error:", err);
       setToastMessage("Voice logging failed. Try again.");
@@ -155,24 +182,7 @@ const Dashboard = () => {
   const age = Number(user?.age) || 0;
   const gender = (user?.gender || "female").toLowerCase();
 
-  let calorieGoal = user?.targetCalories || 2000;
-  if (weight > 0 && height > 0 && age > 0) {
-    let bmr;
-    if (gender === "male") {
-      bmr = 10 * weight + 6.25 * height - 5 * age + 5;
-    } else {
-      bmr = 10 * weight + 6.25 * height - 5 * age - 161;
-    }
-    const tdee = Math.round(bmr * 1.375);
-    const goal = (user?.healthGoals || "").toLowerCase();
-    if (goal.includes("lose") || goal.includes("cut") || goal.includes("deficit")) {
-      calorieGoal = Math.max(1200, tdee - 400);
-    } else if (goal.includes("gain") || goal.includes("bulk")) {
-      calorieGoal = tdee + 300;
-    } else {
-      calorieGoal = tdee;
-    }
-  }
+  const calorieGoal = user?.targetCalories || 2000;
 
   const proteinGoal = user?.proteinGoal || Math.round((calorieGoal * 0.25) / 4);
   const carbsGoal = user?.carbsGoal || Math.round((calorieGoal * 0.45) / 4);

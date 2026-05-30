@@ -1,47 +1,42 @@
 import React, { createContext, useState, useEffect } from 'react';
-import { onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../config/firebase';
 import client from '../api/client';
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // Combined Firebase user & backend profile
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
+  // On mount, check for stored token and fetch profile
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setFirebaseUser(currentUser);
-      if (currentUser) {
+    const initAuth = async () => {
+      const storedToken = localStorage.getItem('token');
+      if (storedToken) {
         try {
-          const fbToken = await currentUser.getIdToken();
-          setToken(fbToken);
-          // Fetch additional profile data from backend
-          const { data } = await client.get('/api/users/profile');
-          setUser({ ...currentUser, ...data });
+          setToken(storedToken);
+          const { data } = await client.get('/api/users/profile', {
+            headers: { Authorization: `Bearer ${storedToken}` }
+          });
+          setUser(data);
         } catch (error) {
-          console.error("Error fetching user profile", error);
-          setUser(currentUser); // fallback to just firebase user if backend fails
+          console.error("Token invalid or expired, clearing auth", error);
+          localStorage.removeItem('token');
+          setToken(null);
+          setUser(null);
         }
-      } else {
-        setToken(null);
-        setUser(null);
-        localStorage.removeItem('token');
-        sessionStorage.removeItem('token');
       }
       setLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
+    initAuth();
   }, []);
 
   const refreshUser = async () => {
-    if (firebaseUser) {
+    if (token) {
       try {
         const { data } = await client.get('/api/users/profile');
-        setUser({ ...firebaseUser, ...data });
+        setUser(data);
       } catch (error) {
         console.error("Profile refresh failed", error);
       }
@@ -49,50 +44,75 @@ export const AuthProvider = ({ children }) => {
   };
 
   const login = async (email, password, rememberMe = false) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    // Fetch profile immediately to return the expected 'role' for legacy compatibility
-    const fbToken = await userCredential.user.getIdToken();
+    setLoading(true);
     try {
-      const { data } = await client.get('/api/users/profile', { headers: { Authorization: `Bearer ${fbToken}` } });
-      return { ...userCredential.user, ...data };
-    } catch(err) {
-      return userCredential.user;
+      const { data } = await client.post('/api/users/login', { email, password, rememberMe });
+      const authToken = data.token;
+      localStorage.setItem('token', authToken);
+      setToken(authToken);
+      setUser(data);
+      return data;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const register = async (email, password) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    // Sync with backend immediately
-    const fbToken = await userCredential.user.getIdToken();
-    const { data } = await client.post('/api/users/register', { email }, { headers: { Authorization: `Bearer ${fbToken}` } });
-    return { ...userCredential.user, ...data };
+  const register = async (email, password, name) => {
+    setLoading(true);
+    try {
+      const { data } = await client.post('/api/users/register', { email, password, name });
+      const authToken = data.token;
+      localStorage.setItem('token', authToken);
+      setToken(authToken);
+      setUser(data);
+      return data;
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const googleLogin = async (payload, rememberMe = true) => {
-    const provider = new GoogleAuthProvider();
-    const userCredential = await signInWithPopup(auth, provider);
-    
-    // Check if we need to hit a backend route to register this user's profile
+  const googleLogin = async (payload, rememberMe = false) => {
+    setLoading(true);
     try {
-      await client.post('/api/users/google-login', { 
-        email: userCredential.user.email,
-        displayName: userCredential.user.displayName,
-        photoURL: userCredential.user.photoURL,
-        uid: userCredential.user.uid
+      // If mock, simulate backend behavior
+      if (payload.isMock) {
+        // In a real app, this would be a backend call.
+        // For now, we simulate a successful login for the mock email.
+        const mockData = {
+          _id: "mock_" + Date.now(),
+          uid: "mock_" + Date.now(),
+          email: payload.email,
+          name: payload.email.split('@')[0],
+          role: payload.email.includes('admin') ? 'admin' : 'user',
+          token: "mock_jwt_token",
+          healthGoals: 'Maintenance',
+        };
+        
+        localStorage.setItem('token', mockData.token);
+        setToken(mockData.token);
+        setUser(mockData);
+        return mockData;
+      }
+
+      // Real Google login would go here
+      const { data } = await client.post('/api/users/google-login', { 
+        token: payload.accessToken,
+        rememberMe 
       });
-    } catch(err) {
-      console.error("Error syncing Google login with backend", err);
+      
+      localStorage.setItem('token', data.token);
+      setToken(data.token);
+      setUser(data);
+      return data;
+    } finally {
+      setLoading(false);
     }
-    
-    return userCredential.user;
   };
 
   const logout = async () => {
-    await signOut(auth);
+    localStorage.removeItem('token');
     setToken(null);
     setUser(null);
-    localStorage.removeItem('token');
-    sessionStorage.removeItem('token');
   };
 
   return (
@@ -101,4 +121,3 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-

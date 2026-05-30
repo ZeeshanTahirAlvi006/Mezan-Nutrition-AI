@@ -52,8 +52,13 @@ const FoodSearch = ({ onAddFood }) => {
   const handleCustomSubmit = async (e) => {
     e.preventDefault();
     try {
-      const { data } = await client.post('/api/food', customFood);
-      onAddFood(data); 
+      onAddFood({
+        name: customFood.name,
+        calories: Number(customFood.calories) || 0,
+        protein: Number(customFood.protein) || 0,
+        carbs: Number(customFood.carbs) || 0,
+        fats: Number(customFood.fats) || 0,
+      }); 
       setShowCustomForm(false);
       setCustomFood({ name: '', calories: '', protein: '', carbs: '', fats: '' });
       setQuery('');

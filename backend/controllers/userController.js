@@ -1,42 +1,108 @@
-import { db } from '../config/firebase.js';
-import { validateUser } from '../models/User.js';
+import User from '../models/User.js';
+import generateToken from '../utils/generateToken.js';
 import { recalculateStreak } from '../utils/streak.js';
 import { invalidateUserCache } from '../middleware/auth.js';
+
+// @desc    Register a new user
+// @route   POST /api/users/register
+const registerUser = async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    const userExists = await User.findOne({ email: email.toLowerCase() });
+    if (userExists) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
+
+    const user = await User.create({
+      email: email.toLowerCase(),
+      password,
+      name: name || email.split('@')[0],
+      ...req.body,
+    });
+
+    res.status(201).json({
+      _id: user._id,
+      uid: user._id.toString(),
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      token: generateToken(user._id),
+    });
+  } catch (error) {
+    console.error('Register Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Auth user & get token
+// @route   POST /api/users/login
+const authUser = async (req, res) => {
+  try {
+    const { email, password, rememberMe } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (user && (await user.matchPassword(password))) {
+      if (user.isDisabled) {
+        return res.status(401).json({ message: 'Account has been disabled' });
+      }
+
+      res.json({
+        _id: user._id,
+        uid: user._id.toString(),
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        healthGoals: user.healthGoals,
+        location: user.location,
+        restrictions: user.restrictions,
+        age: user.age,
+        weight: user.weight,
+        height: user.height,
+        pantry: user.pantry,
+        targetCalories: user.targetCalories,
+        streakCount: user.streakCount,
+        token: generateToken(user._id, rememberMe),
+      });
+    } else {
+      res.status(401).json({ message: 'Invalid email or password' });
+    }
+  } catch (error) {
+    console.error('Login Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 // @desc    Get user profile
 // @route   GET /api/users/profile
 const getUserProfile = async (req, res) => {
   try {
-    try {
-      // Recalculate streak in the background to avoid blocking the profile endpoint response
-      recalculateStreak(req.user.uid).catch(err => console.error("Background streak recalculate failed:", err));
-
-      const userRef = db.collection('users').doc(req.user.uid);
-      const doc = await userRef.get();
-
-      if (doc.exists) {
-        return res.json({
-          _id: doc.id,
-          uid: doc.id,
-          ...doc.data()
-        });
-      } else {
-        return res.status(404).json({ message: 'User profile not found in database' });
-      }
-    } catch (firestoreError) {
-      console.error("Firestore error in getUserProfile (using fallback):", firestoreError.message);
-      // Graceful fallback during Firestore quota exhaustion or DB offline
-      return res.json({
-        _id: req.user.uid,
-        uid: req.user.uid,
-        email: req.user.email,
-        name: req.user.name || req.user.email?.split('@')[0] || 'User',
-        role: req.user.role || 'user',
-        isQuotaExceededFallback: true
-      });
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
+
+    // Recalculate streak in the background
+    recalculateStreak(req.user._id.toString()).catch(err =>
+      console.error('Background streak recalculate failed:', err)
+    );
+
+    res.json({
+      _id: user._id,
+      uid: user._id.toString(),
+      ...user.toObject(),
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -44,93 +110,50 @@ const getUserProfile = async (req, res) => {
 // @route   PUT /api/users/profile
 const updateUserProfile = async (req, res) => {
   try {
-    const userRef = db.collection('users').doc(req.user.uid);
-    const doc = await userRef.get();
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
-    let existingData = doc.exists ? doc.data() : {};
-    
-    // Merge new data
-    const updatedData = {
-      ...existingData,
-      ...req.body,
-      updatedAt: new Date()
-    };
+    // Fields allowed to update
+    const allowedFields = [
+      'name', 'age', 'weight', 'height', 'healthGoals',
+      'restrictions', 'location', 'pantry', 'targetCalories'
+    ];
 
-    // Remove fields we don't want to accidentally overwrite or that belong to Firebase Auth
-    delete updatedData.password;
-    delete updatedData.uid;
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        user[field] = req.body[field];
+      }
+    });
 
-    // Validate against Zod schema
-    const validatedData = validateUser(updatedData);
-
-    await userRef.set(validatedData, { merge: true });
-    invalidateUserCache(req.user.uid);
+    const updatedUser = await user.save();
+    invalidateUserCache(req.user._id.toString());
 
     res.json({
-      _id: req.user.uid,
-      uid: req.user.uid,
-      ...validatedData
+      _id: updatedUser._id,
+      uid: updatedUser._id.toString(),
+      email: updatedUser.email,
+      name: updatedUser.name,
+      age: updatedUser.age,
+      weight: updatedUser.weight,
+      height: updatedUser.height,
+      healthGoals: updatedUser.healthGoals,
+      restrictions: updatedUser.restrictions,
+      location: updatedUser.location,
+      pantry: updatedUser.pantry,
+      targetCalories: updatedUser.targetCalories,
+      streakCount: updatedUser.streakCount,
+      role: updatedUser.role,
     });
   } catch (error) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ message: 'Validation Error', errors: error.errors });
-    }
     res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Sync/Create user profile after Firebase Auth sign up or Google Login
-// @route   POST /api/users/sync
-// @route   POST /api/users/google-login (Legacy route mapped to sync)
-// @route   POST /api/users/register (Legacy route mapped to sync)
-const syncUserProfile = async (req, res) => {
-  try {
-    const userRef = db.collection('users').doc(req.user.uid);
-    const doc = await userRef.get();
-
-    if (!doc.exists) {
-      // Create new profile
-      const newData = {
-        email: req.user.email,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        role: 'user',
-        ...req.body // any initial setup data from signup form
-      };
-      
-      // Cleanup
-      delete newData.password;
-
-      const validatedData = validateUser(newData);
-      await userRef.set(validatedData);
-      
-      res.status(201).json({
-        _id: req.user.uid,
-        uid: req.user.uid,
-        ...validatedData
-      });
-    } else {
-      // User already exists, just return profile
-      res.json({
-        _id: doc.id,
-        uid: doc.id,
-        ...doc.data()
-      });
-    }
-  } catch (error) {
-     if (error.name === 'ZodError') {
-      return res.status(400).json({ message: 'Validation Error', errors: error.errors });
-    }
-    res.status(500).json({ message: error.message });
-  }
+export {
+  registerUser,
+  authUser,
+  getUserProfile,
+  updateUserProfile,
 };
-
-// @desc    Auth user & get token (Legacy fallback, now just syncs)
-// @route   POST /api/users/login
-const authUser = async (req, res) => {
-  // Handled entirely by frontend Firebase Auth now.
-  // This endpoint can just trigger a sync if called.
-  return syncUserProfile(req, res);
-};
-
-export { getUserProfile, updateUserProfile, syncUserProfile, authUser, syncUserProfile as registerUser, syncUserProfile as googleLogin };

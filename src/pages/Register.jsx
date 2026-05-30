@@ -1,7 +1,6 @@
 import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
-import client from "../api/client";
 import { motion } from "framer-motion";
 import { validatePassword } from "../utils/validatePassword";
 import GoogleLoginButton from "../components/auth/GoogleLoginButton";
@@ -13,17 +12,24 @@ const Register = () => {
   const { register, googleLogin } = useContext(AuthContext);
   const navigate = useNavigate();
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleGoogleSuccess = async (googlePayload) => {
     try {
+      setLoading(true);
+      setError("");
       const data = await googleLogin(googlePayload, true);
-      if (!data.age || !data.weight || !data.height) {
+      if (data.role === 'admin') {
+        navigate("/admin");
+      } else if (!data.age || !data.weight || !data.height) {
         navigate("/onboarding");
       } else {
-        navigate(data.role === 'admin' ? '/admin' : '/dashboard');
+        navigate("/dashboard");
       }
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Google Registration failed");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -34,17 +40,25 @@ const Register = () => {
       setError(passwordError);
       return;
     }
+    setLoading(true);
+    setError("");
     try {
-      await register(email, password);
-      navigate("/onboarding"); 
+      const data = await register(email, password);
+      if (data.role === 'admin') {
+        navigate("/admin");
+      } else {
+        navigate("/onboarding");
+      }
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Failed to register");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <main className="min-h-screen flex flex-col md:flex-row bg-surface-off-white">
-      {/* Hero Section */}
+      {/* ... rest of component ... */}
       <section className="relative w-full md:w-1/2 min-h-[353px] md:min-h-screen overflow-hidden">
         <img 
           className="absolute inset-0 w-full h-full object-cover" 
@@ -170,10 +184,18 @@ const Register = () => {
             </div>
 
             <button 
-              className="w-full bg-primary hover:bg-primary/95 hover:shadow-md text-white font-headline font-bold py-4 rounded-2xl transition-all transform active:scale-[0.98] shadow-lg mt-4 cursor-pointer" 
+              className="w-full bg-primary hover:bg-primary/95 hover:shadow-md text-white font-headline font-bold py-4 rounded-2xl transition-all transform active:scale-[0.98] shadow-lg mt-4 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2" 
               type="submit"
+              disabled={loading}
             >
-              Get Started
+              {loading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Creating Account...</span>
+                </>
+              ) : (
+                "Get Started"
+              )}
             </button>
           </form>
 

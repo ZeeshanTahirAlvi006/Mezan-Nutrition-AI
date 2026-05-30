@@ -1,4 +1,4 @@
-import { db } from '../config/firebase.js';
+import FoodItem from '../models/FoodItem.js';
 
 let cachedFoods = null;
 let cacheExpiry = null;
@@ -20,29 +20,26 @@ const MOCK_FOODS_FALLBACK = [
 export const getCachedFoods = async () => {
   const now = Date.now();
   if (cachedFoods && cacheExpiry && now < cacheExpiry) {
-    console.log('[Food Cache] Cache hit!');
     return cachedFoods;
   }
 
-  console.log('[Food Cache] Cache miss! Fetching from Firestore...');
   try {
-    const snapshot = await db.collection('foods').get();
-    cachedFoods = snapshot.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+    const foods = await FoodItem.find().lean();
+    cachedFoods = foods.map(f => ({ _id: f._id.toString(), ...f }));
     cacheExpiry = now + CACHE_TTL;
     return cachedFoods;
   } catch (error) {
-    console.error('[Food Cache] Failed to fetch foods from Firestore:', error.message);
+    console.error('[Food Cache] Failed to fetch foods from MongoDB:', error.message);
     if (cachedFoods) {
-      console.log('[Food Cache] Returning stale cache due to Firestore error');
+      console.log('[Food Cache] Returning stale cache due to MongoDB error');
       return cachedFoods;
     }
-    console.log('[Food Cache] Firestore query failed and no stale cache available. Using MOCK_FOODS fallback.');
+    console.log('[Food Cache] MongoDB query failed and no stale cache available. Using MOCK_FOODS fallback.');
     return MOCK_FOODS_FALLBACK;
   }
 };
 
 export const invalidateFoodCache = () => {
-  console.log('[Food Cache] Cache invalidated!');
   cachedFoods = null;
   cacheExpiry = null;
 };

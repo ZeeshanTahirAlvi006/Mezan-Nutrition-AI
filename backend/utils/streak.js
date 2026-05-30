@@ -1,26 +1,20 @@
-import { db } from '../config/firebase.js';
+import User from '../models/User.js';
+import DailyLog from '../models/DailyLog.js';
 
 export const recalculateStreak = async (userId) => {
   try {
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    
-    if (!userDoc.exists) return 0;
-    const userData = userDoc.data();
+    const user = await User.findById(userId);
+    if (!user) return 0;
 
-    // Fetch all logs for the user WITHOUT orderBy to avoid composite index requirements
-    const logsSnap = await db.collection('dailyLogs').where('userId', '==', userId).get();
-    
-    if (logsSnap.empty) {
-      if (userData.streakCount !== 0) {
-        await userRef.update({ streakCount: 0 });
+    const logs = await DailyLog.find({ userId }).sort({ date: -1 }).lean();
+
+    if (logs.length === 0) {
+      if (user.streakCount !== 0) {
+        user.streakCount = 0;
+        await user.save();
       }
       return 0;
     }
-
-    const logs = logsSnap.docs.map(d => d.data());
-    // Sort logs by date descending in-memory
-    logs.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     // Extract unique normalized dates
     const logDates = [...new Set(logs.map(log => new Date(log.date).setHours(0, 0, 0, 0)))];
@@ -32,8 +26,9 @@ export const recalculateStreak = async (userId) => {
 
     // If the most recent log is older than yesterday, the streak has been broken
     if (mostRecentLogDate < yesterday) {
-      if (userData.streakCount !== 0) {
-        await userRef.update({ streakCount: 0 });
+      if (user.streakCount !== 0) {
+        user.streakCount = 0;
+        await user.save();
       }
       return 0;
     }
@@ -41,7 +36,7 @@ export const recalculateStreak = async (userId) => {
     let streak = 0;
     let expectedDate = today;
 
-    // If they haven't logged today yet but logged yesterday, start consecutive checks from yesterday
+    // If they haven't logged today yet but logged yesterday, start from yesterday
     if (mostRecentLogDate === yesterday && !logDates.includes(today)) {
       expectedDate = yesterday;
     }
@@ -53,13 +48,14 @@ export const recalculateStreak = async (userId) => {
     }
 
     // Update and save if streakCount changed
-    if (userData.streakCount !== streak) {
-      await userRef.update({ streakCount: streak });
+    if (user.streakCount !== streak) {
+      user.streakCount = streak;
+      await user.save();
     }
 
     return streak;
   } catch (error) {
     console.error('Recalculate Streak Error (suppressed):', error.message);
-    return 0; // Prevent parent failure
+    return 0;
   }
 };

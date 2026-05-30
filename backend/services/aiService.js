@@ -226,7 +226,7 @@ const generateChatResponse = async (user, messages) => {
     const gender = (user.gender || 'female').toLowerCase();
 
     let bmr = 0;
-    let calorieGoal = 2000;
+    const calorieGoal = user.targetCalories || 2000;
 
     if (!isNaN(weight) && !isNaN(height) && !isNaN(age) && weight > 0 && height > 0 && age > 0) {
       if (gender === 'male') {
@@ -234,19 +234,6 @@ const generateChatResponse = async (user, messages) => {
       } else {
         bmr = 10 * weight + 6.25 * height - 5 * age - 161;
       }
-      const activityFactor = 1.375; // Active/lightly active default
-      const tdee = Math.round(bmr * activityFactor);
-      const goal = (user.healthGoals || '').toLowerCase();
-      
-      if (goal.includes('lose') || goal.includes('cut') || goal.includes('deficit')) {
-        calorieGoal = Math.max(1200, tdee - 400); // Safe 400 kcal fat loss deficit
-      } else if (goal.includes('gain') || goal.includes('bulk')) {
-        calorieGoal = tdee + 300;
-      } else {
-        calorieGoal = tdee;
-      }
-    } else if (user.targetCalories) {
-      calorieGoal = user.targetCalories;
     }
 
     const proteinGoal = user.proteinGoal || Math.round((calorieGoal * 0.25) / 4); // 25% protein split (balanced vegetarian threshold)

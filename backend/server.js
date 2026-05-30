@@ -8,6 +8,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
+import connectDB from './config/db.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -23,7 +25,7 @@ import weatherRoutes from './routes/weatherRoutes.js';
 const app = express();
 
 // Validate Environment Variables
-const requiredEnvs = ['JWT_SECRET', 'MISTRAL_API_KEY'];
+const requiredEnvs = ['JWT_SECRET', 'MONGO_URI'];
 requiredEnvs.forEach(env => {
   if (!process.env[env]) {
     console.error(`CRITICAL ERROR: ${env} is not defined in environment variables.`);
@@ -70,6 +72,7 @@ app.use(cors(corsOptions));
 app.use(helmet({
   crossOriginResourcePolicy: false, // Allow cross-origin resources
 }));
+
 // Custom Mongo Sanitize Middleware (Express 5 compatible)
 const mongoSanitize = (req, res, next) => {
   const sanitize = (obj) => {
@@ -117,9 +120,6 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(mongoSanitize);
 
-
-// Using Firebase Admin SDK for Database
-
 // Mount Routes
 app.use('/api/users', userRoutes);
 app.use('/api/food', foodRoutes);
@@ -155,6 +155,10 @@ app.get(/.*/, (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Connect to MongoDB, then start the server
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
 });
+// Nodemon trigger comment - restart server final

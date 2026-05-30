@@ -1,5 +1,5 @@
 /**
- * Full tool list for the Antigravity nutritionist.
+ * Full tool list for the Mezan nutritionist.
  * Group order: Logging → Retrieval → Planning → Intelligence
  */
 export const buildTools = () => [
@@ -25,6 +25,7 @@ export const buildTools = () => [
           fiber: { type: 'number', description: 'Dietary fiber in grams (estimate if unknown)' },
           meal_type: { type: 'string', enum: ['breakfast', 'lunch', 'dinner', 'snack', 'pre_workout', 'post_workout'] },
           quantity: { type: 'string', description: 'Portion description (e.g. "1 plate", "200g", "2 pieces")' },
+          servings: { type: 'number', description: 'Number of servings logged (e.g. 1, 1.5, 3) — default: 1' },
           date: { type: 'string', description: 'YYYY-MM-DD — defaults to today' },
         },
         required: ['name', 'calories', 'protein', 'carbs', 'fats'],
@@ -246,7 +247,7 @@ export const buildTools = () => [
     function: {
       name: 'search_knowledge_base',
       description:
-        'Search the Antigravity Nutrition Knowledge Base (verified PDFs). ' +
+        'Search the Mezan Nutrition Knowledge Base (verified PDFs). ' +
         'MUST be called FIRST before answering any nutrition science, diet, ' +
         'supplement, or health question.',
       parameters: {

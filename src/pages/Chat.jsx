@@ -22,6 +22,7 @@ const Chat = () => {
   const [debugMode, setDebugMode] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const isResumingRef = useRef(false);
 
   const suggestedQuestions = [
     "What have I eaten today?",
@@ -43,8 +44,90 @@ const Chat = () => {
     scrollToBottom();
   }, [messages, agentState, loading]);
 
+  const resumeAgentLoopFromTool = async (initialPayload, activeSessionId) => {
+    setLoading(true);
+    try {
+      let currentPayload = initialPayload;
+      let aiDone = false;
+
+      while (!aiDone) {
+        // Send message/tool result to get AI response
+        const { data: aiResponse } = await client.post(
+          "/api/chat/message",
+          currentPayload,
+        );
+
+        console.log("AI Response Received during resume:", aiResponse);
+
+        // Add message to UI
+        setMessages((prev) => [...prev, aiResponse]);
+
+        if (aiResponse.toolCalls && aiResponse.toolCalls.length > 0) {
+          const toolCall = aiResponse.toolCalls[0];
+          const toolArgs = typeof toolCall.function.arguments === "string"
+            ? JSON.parse(toolCall.function.arguments)
+            : toolCall.function.arguments || {};
+
+          // Show Agent Action State
+          setAgentState({
+            toolName: toolCall.function.name,
+            toolArgs: toolArgs,
+            isExecuting: true,
+            result: null,
+          });
+
+          // Execute Tool
+          const { data: toolData } = await client.post(
+            "/api/chat/execute-tool",
+            {
+              toolName: toolCall.function.name,
+              toolArgs: toolArgs,
+              sessionId: activeSessionId,
+              toolCallId: toolCall.id,
+            },
+          );
+
+          // Update Action State
+          setAgentState((prev) => ({
+            ...prev,
+            isExecuting: false,
+            result: toolData.result,
+          }));
+
+          // Prepare next iteration
+          currentPayload = {
+            sessionId: activeSessionId,
+            role: "tool",
+            content: toolData.result,
+            toolCallId: toolCall.id,
+            name: toolCall.function.name,
+          };
+        } else {
+          // Final text response
+          aiDone = true;
+          setAgentState(null); // Clear agent state when done
+          setLoading(false);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          _id: Date.now().toString(),
+          role: "assistant",
+          content:
+            "Sorry, I encountered an error communicating with the AI during tool resumption. Please try again.",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Initialize Session
   useEffect(() => {
+    isResumingRef.current = false;
     const initSession = async (attemptId = null) => {
       try {
         setLoading(true);
@@ -64,6 +147,64 @@ const Chat = () => {
           );
           if (history && history.length > 0) {
             setMessages(history);
+
+            // Auto-detect and resume pending tool calls from the last assistant message
+            const lastMsg = history[history.length - 1];
+            if (lastMsg && lastMsg.role === "assistant" && lastMsg.toolCalls && lastMsg.toolCalls.length > 0) {
+              if (isResumingRef.current) return;
+              isResumingRef.current = true;
+
+              const pendingToolCall = lastMsg.toolCalls[0];
+              const resumeLoop = async () => {
+                const args = typeof pendingToolCall.function.arguments === "string"
+                  ? JSON.parse(pendingToolCall.function.arguments)
+                  : pendingToolCall.function.arguments;
+
+                setAgentState({
+                  toolName: pendingToolCall.function.name,
+                  toolArgs: args,
+                  isExecuting: true,
+                  result: null,
+                });
+
+                try {
+                  // Execute the pending tool
+                  const { data: toolData } = await client.post(
+                    "/api/chat/execute-tool",
+                    {
+                      toolName: pendingToolCall.function.name,
+                      toolArgs: args,
+                      sessionId: data._id,
+                      toolCallId: pendingToolCall.id,
+                    },
+                  );
+
+                  setAgentState({
+                    toolName: pendingToolCall.function.name,
+                    toolArgs: args,
+                    isExecuting: false,
+                    result: toolData.result,
+                  });
+
+                  // Trigger the resumption loop with the tool result payload
+                  await resumeAgentLoopFromTool(
+                    {
+                      sessionId: data._id,
+                      role: "tool",
+                      content: toolData.result,
+                      toolCallId: pendingToolCall.id,
+                      name: pendingToolCall.function.name,
+                    },
+                    data._id
+                  );
+
+                } catch (err) {
+                  console.error("Failed to execute pending tool call on load:", err);
+                }
+              };
+              // Run resumption loop after a slight delay to allow state updates to settle
+              setTimeout(resumeLoop, 100);
+            }
           } else {
             setMessages([
               {
