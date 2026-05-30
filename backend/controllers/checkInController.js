@@ -1,12 +1,11 @@
-import { db } from '../config/firebase.js';
-import { validateCheckIn } from '../models/CheckIn.js';
+import CheckIn from '../models/CheckIn.js';
 
 // @desc    Create daily check-in
 // @route   POST /api/checkin
 const createCheckIn = async (req, res) => {
   try {
     const { date, mood, energyLevel, satiety } = req.body;
-    
+
     if (!date) {
       return res.status(400).json({ message: 'Date is required.' });
     }
@@ -31,56 +30,32 @@ const createCheckIn = async (req, res) => {
       }
     }
 
-    const checkInsRef = db.collection('checkIns');
-    const snapshot = await checkInsRef
-      .where('userId', '==', req.user.uid)
-      .where('date', '==', dateString)
-      .limit(1)
-      .get();
+    const userId = req.user._id.toString();
 
-    let checkInRef;
-    let checkInData;
+    // Upsert: find existing or create new
+    const existingCheckIn = await CheckIn.findOne({ userId, date: dateString });
 
-    if (!snapshot.empty) {
-      // Update
-      const doc = snapshot.docs[0];
-      checkInRef = doc.ref;
-      const existing = doc.data();
-
-      checkInData = {
-        userId: req.user.uid,
-        date: dateString,
-        mood: mood || existing.mood,
-        energyLevel: energyLevel || existing.energyLevel,
-        satiety: satiety || existing.satiety,
-        createdAt: existing.createdAt || new Date(),
-        updatedAt: new Date()
-      };
+    let savedCheckIn;
+    if (existingCheckIn) {
+      if (mood) existingCheckIn.mood = mood;
+      if (energyLevel) existingCheckIn.energyLevel = Number(energyLevel);
+      if (satiety) existingCheckIn.satiety = Number(satiety);
+      savedCheckIn = await existingCheckIn.save();
     } else {
-      // Create new
-      checkInRef = checkInsRef.doc();
-      checkInData = {
-        userId: req.user.uid,
+      savedCheckIn = await CheckIn.create({
+        userId,
         date: dateString,
         mood,
         energyLevel: energyLevel ? Number(energyLevel) : undefined,
         satiety: satiety ? Number(satiety) : undefined,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      });
     }
-
-    const validatedCheckIn = validateCheckIn(checkInData);
-    await checkInRef.set(validatedCheckIn);
 
     res.status(201).json({
-      _id: checkInRef.id,
-      ...validatedCheckIn
+      _id: savedCheckIn._id,
+      ...savedCheckIn.toObject(),
     });
   } catch (error) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ message: 'Validation Error', errors: error.errors });
-    }
     console.error('Create CheckIn Error:', error);
     res.status(500).json({ message: error.message });
   }

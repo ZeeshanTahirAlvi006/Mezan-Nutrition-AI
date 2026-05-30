@@ -1,15 +1,34 @@
-import { z } from 'zod';
+import mongoose from 'mongoose';
 
-export const CheckInSchema = z.object({
-  userId: z.string(),
-  date: z.union([z.string(), z.date()]),
-  mood: z.string().optional(),
-  energyLevel: z.number().min(1).max(10).optional(),
-  satiety: z.number().min(1).max(10).optional(),
-  createdAt: z.date().optional(),
-  updatedAt: z.date().optional()
+const checkInSchema = new mongoose.Schema({
+  userId: {
+    type: String,
+    required: true,
+    index: true,
+  },
+  date: {
+    type: String,
+    required: true,
+  },
+  mood: { type: String, default: undefined },
+  energyLevel: {
+    type: Number,
+    min: 1,
+    max: 10,
+    default: undefined,
+  },
+  satiety: {
+    type: Number,
+    min: 1,
+    max: 10,
+    default: undefined,
+  },
+}, {
+  timestamps: true,
 });
 
-export const validateCheckIn = (data) => {
-  return CheckInSchema.parse(data);
-};
+// Compound index for efficient user+date queries
+checkInSchema.index({ userId: 1, date: 1 });
+
+const CheckIn = mongoose.model('CheckIn', checkInSchema);
+export default CheckIn;

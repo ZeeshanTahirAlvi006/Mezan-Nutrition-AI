@@ -1,0 +1,914 @@
+[
+  {
+    "_id": "6a1a41cd48f1f7778b0aedf2",
+    "userId": "6a0714686a00a1819c562d6c",
+    "title": "mango",
+    "isActive": true,
+    "messages": [
+      {
+        "_id": "89e817ba9aebb7eb53160740",
+        "role": "user",
+        "content": "mango",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:47:57.859Z"
+      },
+      {
+        "_id": "59930efd71f8e0774688365c",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "P2DBfWoS5",
+            "function": {
+              "name": "search_food_database",
+              "arguments": "{\"query\": \"mango\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:47:59.111Z"
+      },
+      {
+        "_id": "08eed22f1f5ffcecd4f90ee4",
+        "role": "tool",
+        "content": "[{\"name\":\"mango\",\"calories\":202,\"protein\":2.8,\"carbs\":50.3,\"fats\":1.3},{\"name\":\"mangosteen canned\",\"calories\":143,\"protein\":0.8,\"carbs\":35.1,\"fats\":1.1},{\"name\":\"mango nectar\",\"calories\":128,\"protein\":0.3,\"carbs\":32.9,\"fats\":0.2}]",
+        "toolCallId": "P2DBfWoS5",
+        "name": "search_food_database",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:47:59.720Z"
+      },
+      {
+        "_id": "2f3a221b98beb6ca7590abe0",
+        "role": "assistant",
+        "content": "**User, mango is a fantastic choice—especially today with the sunny 23°C weather!** It’s hydrating, packed with Vitamin C, and fits well into your muscle-gain goals.\n\nHere’s the macro breakdown for **1 medium mango (approx. 200g)**:\n\n| Food   | Calories | Protein | Carbs | Fats |\n|--------|----------|---------|-------|------|\n| Mango  | 202 kcal | 2.8 g   | 50.3 g| 1.3 g|\n\n---\n**Actionable next step:**\nWould you like me to log this for today’s intake? If so, let me know the portion (e.g., \"1 whole mango\" or \"1 cup sliced\"). Otherwise, I can suggest ways to pair it with protein (e.g., mango + Greek yogurt) to boost your protein intake!",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:48:01.700Z"
+      }
+    ],
+    "createdAt": "2026-05-30T01:47:57.468Z",
+    "updatedAt": "2026-05-30T01:48:01.702Z",
+    "__v": 2
+  },
+  {
+    "_id": "6a1a41df48f1f7778b0aedf3",
+    "userId": "6a0714686a00a1819c562d6c",
+    "title": "mango",
+    "isActive": true,
+    "messages": [
+      {
+        "_id": "0acae7541b927a52e228451b",
+        "role": "user",
+        "content": "mango",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:48:16.371Z"
+      },
+      {
+        "_id": "be0c54cb95da4507e27a46e4",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "GLV8UpfHT",
+            "function": {
+              "name": "search_food_database",
+              "arguments": "{\"query\": \"mango\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:48:17.322Z"
+      },
+      {
+        "_id": "a3d33173bf039d2437a7f7b5",
+        "role": "tool",
+        "content": "[{\"name\":\"mango\",\"calories\":202,\"protein\":2.8,\"carbs\":50.3,\"fats\":1.3},{\"name\":\"mangosteen canned\",\"calories\":143,\"protein\":0.8,\"carbs\":35.1,\"fats\":1.1},{\"name\":\"mango nectar\",\"calories\":128,\"protein\":0.3,\"carbs\":32.9,\"fats\":0.2}]",
+        "toolCallId": "GLV8UpfHT",
+        "name": "search_food_database",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:48:17.890Z"
+      },
+      {
+        "_id": "d2b0640a9dbd310071f59d29",
+        "role": "assistant",
+        "content": "**Fresh mango (1 medium, ~200g):**\n\n| Nutrient   | Amount |\n|------------|--------|\n| Calories   | 202 kcal |\n| Protein    | 2.8 g  |\n| Carbs      | 50.3 g |\n| Fats       | 1.3 g  |\n\n---\n**User**, fresh mango fits perfectly into your **muscle gain** plan today. It’s high in natural sugars for quick energy and provides **2.8g protein**—pair it with a protein source (e.g., Greek yogurt or a handful of almonds) to slow digestion and maximize muscle recovery.\n\n**Next step:** Log this as a **snack** now, or let me know if you ate it earlier so I can update your food diary.",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:48:19.675Z"
+      }
+    ],
+    "createdAt": "2026-05-30T01:48:15.995Z",
+    "updatedAt": "2026-05-30T01:48:19.676Z",
+    "__v": 2
+  },
+  {
+    "_id": "6a1a41f948f1f7778b0aedf4",
+    "userId": "6a0714686a00a1819c562d6c",
+    "title": "burger with cheese",
+    "isActive": true,
+    "messages": [
+      {
+        "_id": "6b6f31a4d123b75b539beb81",
+        "role": "user",
+        "content": "burger with cheese",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:48:41.685Z"
+      },
+      {
+        "_id": "07dab82442a62bed205181c2",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "type": "function",
+            "index": 0,
+            "id": "tool_log_meal_RrIjElfHmxt8VFxUkXx7",
+            "function": {
+              "name": "log_meal",
+              "arguments": "{\"protein\":30,\"fats\":35,\"carbs\":50,\"calories\":600,\"name\":\"burger with cheese\"}"
+            }
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:48:47.263Z"
+      },
+      {
+        "_id": "33a6b8e5f50a471cf3048f68",
+        "role": "tool",
+        "content": "Successfully logged burger with cheese (600 kcal) to the diary for 2026-05-30T01:48:49.408Z.",
+        "toolCallId": "tool_log_meal_RrIjElfHmxt8VFxUkXx7",
+        "name": "log_meal",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:48:49.989Z"
+      },
+      {
+        "_id": "8d0aa5d6950f256643b94f5e",
+        "role": "assistant",
+        "content": "OK, I've logged a burger with cheese. Is there anything else you've eaten today that I can log?\n",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:49:00.239Z"
+      }
+    ],
+    "createdAt": "2026-05-30T01:48:41.307Z",
+    "updatedAt": "2026-05-30T01:49:00.243Z",
+    "__v": 2
+  },
+  {
+    "_id": "6a1a424648f1f7778b0aedf7",
+    "userId": "6a0714686a00a1819c562d6c",
+    "title": "hello coach",
+    "isActive": true,
+    "messages": [
+      {
+        "_id": "8e4629aa7d9aacfcdfe2be63",
+        "role": "user",
+        "content": "hello coach",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T01:50:03.766Z"
+      },
+      {
+        "_id": "71d5527115d93324f0b1cf98",
+        "role": "assistant",
+        "content": "**Good morning, User!**\nThe sun’s already up at 23°C—perfect weather to fuel your muscle-gain goals. Let’s make today count.\n\nWhat’s your first move? A workout, a meal, or a quick check-in on your progress?",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:50:05.142Z"
+      },
+      {
+        "_id": "3c34e5635b656cda23721114",
+        "role": "user",
+        "content": "what time is it",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T01:50:44.240Z"
+      },
+      {
+        "_id": "069dd290e7d9864195538cf5",
+        "role": "assistant",
+        "content": "It’s **6:50 AM** in Pakistan—early enough to crush your goals before the heat kicks in.\n\nWhat’s your plan for the morning? A workout, breakfast, or something else?",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:50:45.461Z"
+      },
+      {
+        "_id": "4afc07ee7bf6ea9f879144c6",
+        "role": "user",
+        "content": "Check my macros",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T01:50:52.613Z"
+      },
+      {
+        "_id": "dae9b28927d4f9eeb8061168",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "zw27Zys7y",
+            "function": {
+              "name": "get_user_food_logs",
+              "arguments": "{\"date\": \"2026-05-30\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:50:53.777Z"
+      },
+      {
+        "_id": "ace7d8154e0713653aedf0ee",
+        "role": "tool",
+        "content": "{\"date\":\"Sat May 30 2026\",\"foods\":[{\"name\":\"tap water\",\"servings\":1,\"calories\":0,\"protein\":0,\"carbs\":0,\"fats\":0},{\"name\":\"tap water\",\"servings\":1,\"calories\":0,\"protein\":0,\"carbs\":0,\"fats\":0},{\"name\":\"1/2 lb. GrillBurger with Cheese\",\"servings\":1,\"calories\":800,\"protein\":40,\"carbs\":44,\"fats\":460}],\"totals\":{\"calories\":800,\"protein\":40,\"carbs\":44,\"fats\":460}}",
+        "toolCallId": "zw27Zys7y",
+        "name": "get_user_food_logs",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:50:54.576Z"
+      },
+      {
+        "_id": "6e448a080434e4ce72fe6d8b",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "vEy9AAfMu",
+            "function": {
+              "name": "get_macro_history",
+              "arguments": "{\"from\": \"2026-05-23\", \"to\": \"2026-05-30\", \"metric\": \"all\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:50:55.405Z"
+      },
+      {
+        "_id": "2dd4462b0bdb57de297a02e3",
+        "role": "tool",
+        "content": "[{\"date\":\"Sat, May 30\",\"calories\":800,\"protein\":40,\"carbs\":44,\"fats\":460}]",
+        "toolCallId": "vEy9AAfMu",
+        "name": "get_macro_history",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:50:56.203Z"
+      },
+      {
+        "_id": "4787fddeff508eed714af1ef",
+        "role": "assistant",
+        "content": "Here's how your macros look so far today:\n| Nutrient  | Consumed | Target | % of Goal |\n|-----------|----------|--------|-----------|\n| Calories | 800     | 2502   | 32%       |\n| Protein   | 40      | 156    | 26%       |\n| Carbs     | 44      | 281    | 16%       |\n| Fats      | 46      | 83     | 55%       |\n\nYou've had a good start with your GrillBurger, but there's room to optimize your macros, especially proteins and carbs. \n\nNext step: Let's get you a post-workout snack or a meal that'll push you closer to your daily targets. What type of meal are you in the mood for?",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:50:58.174Z"
+      },
+      {
+        "_id": "d0b6cd5ed1394132c75f05a8",
+        "role": "user",
+        "content": "suggest me a nice breakfast",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T01:51:07.578Z"
+      },
+      {
+        "_id": "c50c4b530c11d76180c81912",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "egyEXxhjP",
+            "function": {
+              "name": "search_food_database",
+              "arguments": "{\"query\": \"omelette with whole eggs and egg whites\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:51:08.941Z"
+      },
+      {
+        "_id": "a6928bece7f7440373902c99",
+        "role": "tool",
+        "content": "No food items found matching 'omelette with whole eggs and egg whites'.",
+        "toolCallId": "egyEXxhjP",
+        "name": "search_food_database",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:51:11.300Z"
+      },
+      {
+        "_id": "93f3f67101066df3ea494524",
+        "role": "assistant",
+        "content": "How about a power-packed Halal omelette to kickstart your muscle gain? This dish delivers a high-protein punch to fuel your workouts and keep you feeling full.\n\n**Halal Omelette**\n\n| Food                              | Calories | Protein | Carbs | Fats |\n| --------------------------------- | -------- | ------- | ----- | ---- |\n| 3 Whole Eggs + 3 Egg Whites       | 270      | 30      | 3     | 15   |\n| Spinach (1 cup)                   | 7        | 1       | 1     | 0    |\n| Mushrooms (1/2 cup)               | 8        | 1       | 1     | 0    |\n| Cheddar Cheese (30g, optional)    | 120      | 7       | 1     | 10   |\n| Whole Wheat Toast (2 slices)      | 140      | 8       | 28    | 2    |\n| **Totals**                        | **545**  | **47**  | **34**| **27** |\n\n**Ingredients:**\n\n*   3 whole eggs\n*   3 egg whites\n*   1 cup spinach, chopped\n*   ½ cup mushrooms, sliced\n*   30g cheddar cheese, shredded (optional)\n*   2 slices whole wheat toast (Halal certified)\n*   Salt and pepper to taste\n*   Olive oil or coconut oil for cooking\n*   Halal spices (cumin, turmeric, coriander)\n\n**Instructions:**\n\n1.  Whisk together the eggs, egg whites, salt, pepper, and selected Halal spices in a bowl.\n2.  Heat a lightly oiled pan over medium heat. Sauté spinach and mushrooms until tender.\n3.  Pour the egg mixture into the pan. Cook until the edges begin to set.\n4.  Sprinkle cheese (if using) over one half of the omelette.\n5.  Fold the omelette in half and cook until the cheese is melted and the eggs are cooked through.\n6.  Serve hot with whole wheat toast on the side.\n\nThis omelette will help you reach 51% of your daily protein, keeps carbs at 28%, and brings you to around 85% of your daily fat intake.\n\nShall I log this breakfast for you?\n",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:51:25.620Z"
+      },
+      {
+        "_id": "a4cff925ae28a65557ec2a6e",
+        "role": "user",
+        "content": "Log this meal",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T01:51:48.691Z"
+      },
+      {
+        "_id": "5f8f1f87f31030bc78eaaf26",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "GFGqnv4si",
+            "function": {
+              "name": "log_meal",
+              "arguments": "{\"name\": \"Halal Omelette with Whole Wheat Toast\", \"calories\": 545, \"protein\": 47, \"carbs\": 34, \"fats\": 27, \"meal_type\": \"breakfast\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:51:49.845Z"
+      },
+      {
+        "_id": "7849a1996a8605569f5519e8",
+        "role": "tool",
+        "content": "Successfully logged Halal Omelette with Whole Wheat Toast (545 kcal) to the diary for 2026-05-30T01:51:50.257Z.",
+        "toolCallId": "GFGqnv4si",
+        "name": "log_meal",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:51:50.866Z"
+      },
+      {
+        "_id": "5a2b51cccca4af7b611a0bd7",
+        "role": "assistant",
+        "content": "Your **Halal Omelette with Whole Wheat Toast** is now logged for breakfast—**545 kcal, 47g protein, 34g carbs, 27g fats**.\n\nYou’ve got **1,957 kcal, 109g protein, 247g carbs, and 56g fats** left to hit your daily muscle-gain targets.\n\nNext step: Want a mid-morning snack or a hydration check? Let me know!",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:51:52.192Z"
+      },
+      {
+        "_id": "865f8e7e6f0f641e01411e30",
+        "role": "user",
+        "content": "Log this meal",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T01:52:14.600Z"
+      },
+      {
+        "_id": "bf85a8653f845284f8cb9225",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "A3Bmw6SLW",
+            "function": {
+              "name": "log_meal",
+              "arguments": "{\"name\": \"Halal Omelette with Whole Wheat Toast\", \"calories\": 545, \"protein\": 47, \"carbs\": 34, \"fats\": 27, \"meal_type\": \"breakfast\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:52:15.653Z"
+      },
+      {
+        "_id": "d0b170d6dcddadee2efb5574",
+        "role": "tool",
+        "content": "Successfully logged Halal Omelette with Whole Wheat Toast (545 kcal) to the diary for 2026-05-30T01:52:16.054Z.",
+        "toolCallId": "A3Bmw6SLW",
+        "name": "log_meal",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:52:16.646Z"
+      },
+      {
+        "_id": "c05165e8d032adf096ef785e",
+        "role": "assistant",
+        "content": "Your **Halal Omelette with Whole Wheat Toast** has been logged again for breakfast—**545 kcal, 47g protein, 34g carbs, 27g fats**.\n\nYou’ve now got **1,957 kcal, 109g protein, 247g carbs, and 56g fats** remaining to hit your daily muscle-gain targets.\n\nNext step: Want to log a mid-morning snack, check your water intake, or adjust anything? Let me know!",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:52:18.132Z"
+      },
+      {
+        "_id": "76d8a8397d91480777c3371b",
+        "role": "user",
+        "content": "Log this meal",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T01:56:18.146Z"
+      },
+      {
+        "_id": "0df0b92f8815e9482b6834ad",
+        "role": "assistant",
+        "content": "It looks like you're trying to log the same meal again. I’ve already recorded your **Halal Omelette with Whole Wheat Toast** for breakfast.\n\nWould you like to log something else, check your remaining macros, or get a snack suggestion? Let me know how I can assist!",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:56:19.941Z"
+      },
+      {
+        "_id": "29bff69ef69ef312741f4f9a",
+        "role": "user",
+        "content": "i dont see it in my logs",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T01:56:35.674Z"
+      },
+      {
+        "_id": "fc49c30013067ca9e8261b09",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "sEoIXx9KU",
+            "function": {
+              "name": "get_user_food_logs",
+              "arguments": "{\"date\": \"2026-05-30\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:56:36.802Z"
+      },
+      {
+        "_id": "8f6057b92b001d932d73f056",
+        "role": "tool",
+        "content": "No food logs found for Sat May 30 2026.",
+        "toolCallId": "sEoIXx9KU",
+        "name": "get_user_food_logs",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:56:37.570Z"
+      },
+      {
+        "_id": "adcc4e12f84ebc6b98b1cce0",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "OW7BUfWaJ",
+            "function": {
+              "name": "log_meal",
+              "arguments": "{\"name\": \"Halal Omelette with Whole Wheat Toast\", \"calories\": 545, \"protein\": 47, \"carbs\": 34, \"fats\": 27, \"meal_type\": \"breakfast\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:56:38.549Z"
+      },
+      {
+        "_id": "799208db0a658e25e8cf290f",
+        "role": "tool",
+        "content": "Successfully logged Halal Omelette with Whole Wheat Toast (545 kcal) to the diary for 2026-05-30T01:56:40.411Z.",
+        "toolCallId": "OW7BUfWaJ",
+        "name": "log_meal",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:56:40.999Z"
+      },
+      {
+        "_id": "06b209d86e8628f0ba1d4ab1",
+        "role": "assistant",
+        "content": "Your **Halal Omelette with Whole Wheat Toast** is now successfully logged for breakfast—**545 kcal, 47g protein, 34g carbs, 27g fats**.\n\nYou’ve got **1,957 kcal, 109g protein, 247g carbs, and 56g fats** left to hit your daily muscle-gain targets.\n\nNext step: Want to log a mid-morning snack, check your water intake, or get a snack suggestion? Let me know!",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:56:42.267Z"
+      },
+      {
+        "_id": "b3b21e3322b471a4aa481bd2",
+        "role": "user",
+        "content": "u are loggin Al Rawabi Milk",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T01:58:50.961Z"
+      },
+      {
+        "_id": "5b7f99b50245e19280dd7799",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "VSXokXbLT",
+            "function": {
+              "name": "search_food_database",
+              "arguments": "{\"query\": \"Al Rawabi Milk\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:58:52.158Z"
+      },
+      {
+        "_id": "0616c57f674beccb04fb00e6",
+        "role": "tool",
+        "content": "[{\"name\":\"Al Rawabi Whole Milk (1 Cup)\",\"calories\":150,\"protein\":8,\"carbs\":12,\"fats\":8}]",
+        "toolCallId": "VSXokXbLT",
+        "name": "search_food_database",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:58:52.762Z"
+      },
+      {
+        "_id": "31d312dba25abacf7cf51e62",
+        "role": "assistant",
+        "content": "Here’s the macro breakdown for **Al Rawabi Whole Milk (1 cup)**:\n\n| Food                     | Calories | Protein | Carbs | Fats |\n|--------------------------|----------|---------|-------|------|\n| Al Rawabi Whole Milk     | 150      | 8       | 12    | 8    |\n\nWould you like me to log this for you? If so, how much did you consume?",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:58:54.863Z"
+      }
+    ],
+    "createdAt": "2026-05-30T01:49:58.624Z",
+    "updatedAt": "2026-05-30T01:58:54.866Z",
+    "__v": 17
+  },
+  {
+    "_id": "6a1a424648f1f7778b0aedf8",
+    "userId": "6a0714686a00a1819c562d6c",
+    "title": "New Conversation",
+    "isActive": true,
+    "messages": [],
+    "createdAt": "2026-05-30T01:49:58.627Z",
+    "updatedAt": "2026-05-30T01:49:58.627Z",
+    "__v": 0
+  },
+  {
+    "_id": "6a1a441ec5bf5eb394665eb7",
+    "userId": "6a0714686a00a1819c562d6c",
+    "title": "Al Rawabi milk",
+    "isActive": true,
+    "messages": [
+      {
+        "_id": "1dc27ce372029f5d8379bfc6",
+        "role": "user",
+        "content": "Al Rawabi milk",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:57:50.727Z"
+      },
+      {
+        "_id": "d2bf20b336342c84430dd5c2",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "T4ci2Dnya",
+            "function": {
+              "name": "search_food_database",
+              "arguments": "{\"query\": \"Al Rawabi milk\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T01:57:52.177Z"
+      },
+      {
+        "_id": "01bc6d6c99299808039bd9ad",
+        "role": "tool",
+        "content": "[{\"name\":\"Al Rawabi Whole Milk (1 Cup)\",\"calories\":150,\"protein\":8,\"carbs\":12,\"fats\":8}]",
+        "toolCallId": "T4ci2Dnya",
+        "name": "search_food_database",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:57:52.767Z"
+      },
+      {
+        "_id": "ddeae800a80bb4bd872303bf",
+        "role": "assistant",
+        "content": "Here’s the macro breakdown for **Al Rawabi Whole Milk (1 cup / 250 ml)**:\n\n| Nutrient  | Amount |\n|-----------|--------|\n| Calories  | 150 kcal |\n| Protein   | 8 g     |\n| Carbs     | 12 g    |\n| Fats      | 8 g     |\n\n---\n**For muscle gain**, this fits well into your daily targets:\n- **Remaining protein**: 148 g (you’ve got 8 g covered).\n- **Remaining fats**: 75 g (8 g covered).\n- **Remaining carbs**: 269 g (12 g covered).\n\n**Next step**: How much milk are you planning to have today? I’ll log it for you.",
+        "feedback": null,
+        "createdAt": "2026-05-30T01:57:54.327Z"
+      }
+    ],
+    "createdAt": "2026-05-30T01:57:50.318Z",
+    "updatedAt": "2026-05-30T01:57:54.328Z",
+    "__v": 2
+  },
+  {
+    "_id": "6a1a451c2bebb1743f3c0e58",
+    "userId": "6a0714686a00a1819c562d6c",
+    "title": "suggest me a good breakfast",
+    "isActive": true,
+    "messages": [
+      {
+        "_id": "77dce93ba1e42de881b15f77",
+        "role": "user",
+        "content": "suggest me a good breakfast",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T02:02:13.624Z"
+      },
+      {
+        "_id": "f5a6a9d0192d66f4efac2d75",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "9EbxMWZRa",
+            "function": {
+              "name": "search_food_database",
+              "arguments": "{\"query\": \"halal egg omelette with whole wheat toast and fresh fruit\", \"portion\": \"1 serving\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:15.570Z"
+      },
+      {
+        "_id": "84bac5e3d91a9d0076e7dc9b",
+        "role": "tool",
+        "content": "No food items found matching 'halal egg omelette with whole wheat toast and fresh fruit'.",
+        "toolCallId": "9EbxMWZRa",
+        "name": "search_food_database",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:17.795Z"
+      },
+      {
+        "_id": "0ac98812a9509ee69e31e6b0",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "ejRhBZwgt",
+            "function": {
+              "name": "search_food_database",
+              "arguments": "{\"query\": \"egg omelette\", \"portion\": \"100g\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:18.699Z"
+      },
+      {
+        "_id": "f3e941b6ebf870344237ac65",
+        "role": "tool",
+        "content": "No food items found matching 'egg omelette'.",
+        "toolCallId": "ejRhBZwgt",
+        "name": "search_food_database",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:19.329Z"
+      },
+      {
+        "_id": "92379b357e9eac24e324d104",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "vRiWvRWaO",
+            "function": {
+              "name": "search_food_database",
+              "arguments": "{\"query\": \"eggs\", \"portion\": \"2 large\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:20.065Z"
+      },
+      {
+        "_id": "491bb4bd859ace8e4cffb549",
+        "role": "tool",
+        "content": "[{\"name\":\"Eggs (2 Large Boiled)\",\"calories\":140,\"protein\":12,\"carbs\":1,\"fats\":10},{\"name\":\"scrambled eggs\",\"calories\":100,\"protein\":6.5,\"carbs\":1,\"fats\":7.6},{\"name\":\"scrambled eggs mcdonalds\",\"calories\":98,\"protein\":7.7,\"carbs\":0.9,\"fats\":7.5}]",
+        "toolCallId": "vRiWvRWaO",
+        "name": "search_food_database",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:20.653Z"
+      },
+      {
+        "_id": "240a10aa3ff5af81535e9c5c",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "cKgBd4I8j",
+            "function": {
+              "name": "search_food_database",
+              "arguments": "{\"query\": \"whole wheat bread\", \"portion\": \"2 slices\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:21.342Z"
+      },
+      {
+        "_id": "71ead8d13f977e728958613c",
+        "role": "tool",
+        "content": "[{\"name\":\"Carrefour Whole Wheat Bread (1 slice)\",\"calories\":70,\"protein\":3,\"carbs\":12,\"fats\":1},{\"name\":\"whole wheat bread natures own\",\"calories\":50,\"protein\":0,\"carbs\":0,\"fats\":1},{\"name\":\"whole wheat bread\",\"calories\":128,\"protein\":3.9,\"carbs\":23.6,\"fats\":2.5}]",
+        "toolCallId": "cKgBd4I8j",
+        "name": "search_food_database",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:21.947Z"
+      },
+      {
+        "_id": "7f2980a40eadf3f2d54d9508",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "n7bpm6g0w",
+            "type": "function",
+            "function": {
+              "name": "search_food_database",
+              "arguments": "{\"portion\":\"1 cup\",\"query\":\"fresh fruit\"}"
+            }
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:23.569Z"
+      },
+      {
+        "_id": "175c3a0f96a3b5e662a639be",
+        "role": "tool",
+        "content": "[{\"name\":\"Grapefruit, fresh, 5\\\" diameter\",\"calories\":50,\"protein\":1,\"carbs\":14,\"fats\":0}]",
+        "toolCallId": "n7bpm6g0w",
+        "name": "search_food_database",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:24.157Z"
+      },
+      {
+        "_id": "3065d07bf64d74f59cfd79e7",
+        "role": "assistant",
+        "content": "Okay, based on your goal to gain muscle, let's aim for a protein-rich breakfast. I recommend two scrambled eggs with two slices of whole wheat toast and a cup of mixed fruit.\n\n| Food               | Calories | Protein | Carbs | Fats |\n|--------------------|----------|---------|-------|------|\n| Scrambled Eggs (2) | 100      | 6       | 1     | 8    |\n| Whole Wheat Toast  | 140      | 6       | 24    | 2    |\n| Mixed Fruit        | 80       | 1       | 21    | 0    |\n| **Total**          | **320**  | **13**  | **46** | **10** |\n\nThis breakfast will give you a good start to your day with a balance of protein, carbs and fats. What did you have for breakfast today?\n",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:36.101Z"
+      },
+      {
+        "_id": "81555f3aa41f4f8ed142bd5b",
+        "role": "user",
+        "content": "Log this meal",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T02:02:47.397Z"
+      },
+      {
+        "_id": "02f0fd115db9f3afb9eff914",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "type": "function",
+            "index": 0,
+            "id": "tool_log_meal_SEo96mDlUykQNtI4JCXa",
+            "function": {
+              "name": "log_meal",
+              "arguments": "{\"name\":\"Scrambled Eggs with Whole Wheat Toast and Mixed Fruit\",\"carbs\":46,\"fats\":10,\"protein\":13,\"meal_type\":\"breakfast\",\"calories\":320}"
+            }
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:58.074Z"
+      },
+      {
+        "_id": "e3651a1bcf912ac33a6710ee",
+        "role": "tool",
+        "content": "Successfully logged Scrambled Eggs with Whole Wheat Toast and Mixed Fruit (320 kcal) to the diary for 2026-05-30T02:02:58.472Z.",
+        "toolCallId": "tool_log_meal_SEo96mDlUykQNtI4JCXa",
+        "name": "log_meal",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:02:59.055Z"
+      },
+      {
+        "_id": "9d20e21369d5202e17488a22",
+        "role": "assistant",
+        "content": "Alright, I've logged your breakfast of scrambled eggs with whole wheat toast and mixed fruit. Is there anything else you'd like to log or any adjustments you want to make to the entry?\n",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:03:09.838Z"
+      }
+    ],
+    "createdAt": "2026-05-30T02:02:04.152Z",
+    "updatedAt": "2026-05-30T02:03:09.843Z",
+    "__v": 8
+  },
+  {
+    "_id": "6a1a458611bf3ad2f62e5336",
+    "userId": "6a0714686a00a1819c562d6c",
+    "title": "suggest me a healthy lunch",
+    "isActive": true,
+    "messages": [
+      {
+        "_id": "80eac39e31547d2be65f81c9",
+        "role": "user",
+        "content": "suggest me a healthy lunch",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T02:03:59.699Z"
+      },
+      {
+        "_id": "df20022f95a2fc6bc91ebcc7",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "bsxcDqacW",
+            "function": {
+              "name": "get_user_food_logs",
+              "arguments": "{\"date\": \"2026-05-30\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T02:04:01.051Z"
+      },
+      {
+        "_id": "d710c097636762d71074884a",
+        "role": "tool",
+        "content": "{\"date\":\"Sat May 30 2026\",\"foods\":[{\"name\":\"Apple (Medium)\",\"servings\":1,\"calories\":95,\"protein\":0.5,\"carbs\":25,\"fats\":0.3},{\"name\":\"Eggs (2 Large Boiled)\",\"servings\":1,\"calories\":140,\"protein\":12,\"carbs\":1,\"fats\":10}],\"totals\":{\"calories\":235,\"protein\":12.5,\"carbs\":26,\"fats\":10.3}}",
+        "toolCallId": "bsxcDqacW",
+        "name": "get_user_food_logs",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:04:01.818Z"
+      },
+      {
+        "_id": "a838d109f17130d393e17358",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "ElXMBSinp",
+            "function": {
+              "name": "get_weather_forecast",
+              "arguments": "{\"location\": \"Pakistan\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T02:04:02.474Z"
+      },
+      {
+        "_id": "b1487b47ee8bd88b3a562231",
+        "role": "tool",
+        "content": "{\"location\":{\"name\":\"Pakistan\",\"country\":\"Pakistan\",\"latitude\":30,\"longitude\":70,\"query\":\"PAKISTAN\"},\"current\":{\"temp\":25,\"feelsLike\":22,\"humidity\":29,\"isDay\":true,\"precipitation\":0,\"windSpeed\":6.5,\"code\":0,\"condition\":\"Sunny\",\"emoji\":\"☀️\",\"icon\":\"wb_sunny\"},\"daily\":[{\"date\":\"2026-05-30\",\"tempMax\":30,\"tempMin\":22,\"feelsLikeMax\":29,\"feelsLikeMin\":20,\"precipitationSum\":0,\"code\":3,\"condition\":\"Partly Cloudy\",\"emoji\":\"⛅\",\"icon\":\"cloud_queue\"},{\"date\":\"2026-05-31\",\"tempMax\":30,\"tempMin\":19,\"feelsLikeMax\":30,\"feelsLikeMin\":20,\"precipitationSum\":0.3,\"code\":51,\"condition\":\"Drizzle\",\"emoji\":\"🌧️\",\"icon\":\"grain\"},{\"date\":\"2026-06-01\",\"tempMax\":32,\"tempMin\":21,\"feelsLikeMax\":33,\"feelsLikeMin\":21,\"precipitationSum\":1.4,\"code\":55,\"condition\":\"Drizzle\",\"emoji\":\"🌧️\",\"icon\":\"grain\"},{\"date\":\"2026-06-02\",\"tempMax\":32,\"tempMin\":20,\"feelsLikeMax\":34,\"feelsLikeMin\":21,\"precipitationSum\":0.1,\"code\":51,\"condition\":\"Drizzle\",\"emoji\":\"🌧️\",\"icon\":\"grain\"},{\"date\":\"2026-06-03\",\"tempMax\":33,\"tempMin\":22,\"feelsLikeMax\":32,\"feelsLikeMin\":22,\"precipitationSum\":0.3,\"code\":51,\"condition\":\"Drizzle\",\"emoji\":\"🌧️\",\"icon\":\"grain\"},{\"date\":\"2026-06-04\",\"tempMax\":29,\"tempMin\":21,\"feelsLikeMax\":31,\"feelsLikeMin\":22,\"precipitationSum\":1.5,\"code\":51,\"condition\":\"Drizzle\",\"emoji\":\"🌧️\",\"icon\":\"grain\"},{\"date\":\"2026-06-05\",\"tempMax\":29,\"tempMin\":19,\"feelsLikeMax\":30,\"feelsLikeMin\":20,\"precipitationSum\":0.6,\"code\":51,\"condition\":\"Drizzle\",\"emoji\":\"🌧️\",\"icon\":\"grain\"}]}",
+        "toolCallId": "ElXMBSinp",
+        "name": "get_weather_forecast",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:04:03.236Z"
+      },
+      {
+        "_id": "f5a155ede7c830090f79bf6e",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "XgKQh4QKC",
+            "function": {
+              "name": "generate_meal_plan",
+              "arguments": "{\"days\": 1, \"cuisine_pref\": \"South Asian\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T02:04:03.947Z"
+      },
+      {
+        "_id": "328f8842ef083db75f78742f",
+        "role": "tool",
+        "content": "Tool \"generate_meal_plan\" is currently offline or in mock development phase. Proceed with the conversation using general knowledge, available data, and user profile targets.",
+        "toolCallId": "XgKQh4QKC",
+        "name": "generate_meal_plan",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:04:04.523Z"
+      },
+      {
+        "_id": "9e6babc882cf2207af8108d3",
+        "role": "assistant",
+        "content": "Considering your goal of muscle gain and the sunny weather in Pakistan, I suggest a healthy and filling lunch option. How about a plate of chicken biryani with a side of mixed vegetables and a glass of fresh lime water? The complex carbohydrates from the biryani will provide sustained energy, while the protein from the chicken will support muscle growth and repair. \n\nTo make it even more balanced, you could add some hydrating foods like cucumbers or melons to your meal. Given your location, you might also consider incorporating some local and seasonal ingredients to make the dish more flavorful and nutritious. \n\nNext step: Would you like me to provide you with a simple recipe for chicken biryani, or suggest some alternative lunch options based on your dietary preferences?",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:04:06.453Z"
+      },
+      {
+        "_id": "fb2e01b4fc5762ca0fc2c863",
+        "role": "user",
+        "content": "Log this meal",
+        "feedback": null,
+        "imageUrl": null,
+        "createdAt": "2026-05-30T02:04:15.642Z"
+      },
+      {
+        "_id": "c96fa01e5ecc0eb18818b8c9",
+        "role": "assistant",
+        "content": "",
+        "toolCalls": [
+          {
+            "id": "QQrhhQVvc",
+            "function": {
+              "name": "log_meal",
+              "arguments": "{\"name\": \"Chicken Biryani with Mixed Vegetables and Lime Water\", \"calories\": 850, \"protein\": 45, \"carbs\": 110, \"fats\": 22, \"meal_type\": \"lunch\", \"quantity\": \"1 large plate with 1 glass lime water\"}"
+            },
+            "index": 0
+          }
+        ],
+        "feedback": null,
+        "createdAt": "2026-05-30T02:04:16.974Z"
+      },
+      {
+        "_id": "b674d5d9ae7c2d60960f95fd",
+        "role": "tool",
+        "content": "Successfully logged Chicken Biryani with Mixed Vegetables and Lime Water (850 kcal) to the diary for 2026-05-30T02:04:19.008Z.",
+        "toolCallId": "QQrhhQVvc",
+        "name": "log_meal",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:04:19.582Z"
+      },
+      {
+        "_id": "68b6fb0402e20e94ae28c0b1",
+        "role": "assistant",
+        "content": "Alright, I've logged the Chicken Biryani with Mixed Vegetables and Lime Water for you. Anything else for now?\n",
+        "feedback": null,
+        "createdAt": "2026-05-30T02:04:29.982Z"
+      }
+    ],
+    "createdAt": "2026-05-30T02:03:50.781Z",
+    "updatedAt": "2026-05-30T02:04:29.985Z",
+    "__v": 6
+  }
+]

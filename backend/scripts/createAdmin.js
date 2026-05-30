@@ -1,62 +1,65 @@
-﻿import 'dotenv/config';
-import { auth, db } from '../config/firebase.js';
-import { validatePassword } from '../utils/validatePassword.js';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+import connectDB from '../config/db.js';
+import User from '../models/User.js';
 
 const run = async () => {
-  const email = "admin@admin.com";
-  const password = "Admin#123";
+  const email = process.env.ADMIN_EMAIL || "admin@admin.com";
+  const password = process.env.ADMIN_PASSWORD || "Admin#123";
 
   if (!email || !password) {
     console.error('CRITICAL: ADMIN_EMAIL and ADMIN_PASSWORD must be set in environment variables.');
     process.exit(1);
   }
 
-  // const passwordError = validatePassword(password);
-  // if (passwordError) {
-  //   console.error(passwordError);
-  //   process.exit(1);
-  // }
-
   try {
-    let userRecord;
-    try {
-      userRecord = await auth.getUserByEmail(email);
-      userRecord = await auth.updateUser(userRecord.uid, { password });
-      console.log(`Admin Firebase Auth password updated: ${email}`);
-    } catch (error) {
-      if (error.code === 'auth/user-not-found') {
-        userRecord = await auth.createUser({
-          email,
-          password,
-          emailVerified: true,
-        });
-        console.log(`Admin Firebase Auth user created: ${email}`);
-      } else {
-        throw error;
-      }
+    await connectDB();
+    console.log('Connected to database...');
+
+    // Check if admin already exists
+    const existingAdmin = await User.findOne({ email: email.toLowerCase() });
+
+    if (existingAdmin) {
+      // Update existing admin
+      existingAdmin.role = 'admin';
+      existingAdmin.isDisabled = false;
+      existingAdmin.password = password; // Will be hashed by pre-save hook
+      existingAdmin.name = 'System Admin';
+      existingAdmin.age = 30;
+      existingAdmin.weight = 75;
+      existingAdmin.height = 175;
+      await existingAdmin.save();
+      console.log(`Admin account updated: ${email} (ID: ${existingAdmin._id})`);
+    } else {
+      // Create new admin
+      const admin = await User.create({
+        email: email.toLowerCase(),
+        password,
+        name: 'System Admin',
+        role: 'admin',
+        isDisabled: false,
+        age: 30,
+        weight: 75,
+        height: 175,
+        healthGoals: 'Maintenance',
+        location: 'UAE'
+      });
+      console.log(`New admin user created: ${email} (ID: ${admin._id})`);
     }
 
-    const userRef = db.collection('users').doc(userRecord.uid);
-    const profileData = {
-      email,
-      role: 'admin',
-      isDisabled: false,
-      updatedAt: new Date(),
-    };
-
-    const existingProfile = await userRef.get();
-    if (!existingProfile.exists) {
-      profileData.createdAt = new Date();
-    }
-
-    await userRef.set(profileData, { merge: true });
-    console.log(`Admin profile created/updated in Firestore: ${userRecord.uid}`);
-
+    console.log('Process completed successfully.');
     process.exit(0);
   } catch (error) {
     console.error('Failed to create admin:', error.message || error);
     process.exit(1);
   }
 };
+
 
 run();

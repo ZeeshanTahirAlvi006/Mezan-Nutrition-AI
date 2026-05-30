@@ -69,7 +69,7 @@ const AdminLayout = () => {
       </aside>
       <main className="flex-1 overflow-auto">
         <header className="sticky top-0 z-10 bg-slate-900/90 backdrop-blur border-b border-slate-700 px-8 py-4">
-          <h1 className="text-sm font-medium text-slate-400">Antigravity Nutrition — Administration</h1>
+          <h1 className="text-sm font-medium text-slate-400">Mezan Nutrition — Administration</h1>
         </header>
         <div className="p-8">
           <Outlet />

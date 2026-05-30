@@ -1,0 +1,2 @@
+1. i told ai coach i had 300g grilled chicken breast but it logged only 100g
+2. when we are navigated to the AI coach from the voice log - the AI gives no response until we type that message/food item again

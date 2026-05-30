@@ -16,7 +16,6 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "axios": "^1.16.1",
-    "firebase": "^12.13.0",
     "framer-motion": "^12.38.0",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",

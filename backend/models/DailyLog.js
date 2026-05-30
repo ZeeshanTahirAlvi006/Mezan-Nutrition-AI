@@ -1,29 +1,38 @@
-import { z } from 'zod';
+import mongoose from 'mongoose';
 
-export const EmbeddedFoodItemSchema = z.object({
-  foodId: z.string().nullable().optional(), // Reference if needed
-  name: z.string(),
-  calories: z.number(),
-  protein: z.number(),
-  carbs: z.number(),
-  fats: z.number(),
-  servings: z.number().default(1)
+const embeddedFoodItemSchema = new mongoose.Schema({
+  foodId: { type: String, default: null },
+  name: { type: String, required: true },
+  calories: { type: Number, default: 0 },
+  protein: { type: Number, default: 0 },
+  carbs: { type: Number, default: 0 },
+  fats: { type: Number, default: 0 },
+  servings: { type: Number, default: 1 },
+}, { _id: false });
+
+const dailyLogSchema = new mongoose.Schema({
+  userId: {
+    type: String,
+    required: true,
+    index: true,
+  },
+  date: {
+    type: String,
+    required: true,
+  },
+  foodItems: [embeddedFoodItemSchema],
+  totals: {
+    calories: { type: Number, default: 0 },
+    protein: { type: Number, default: 0 },
+    carbs: { type: Number, default: 0 },
+    fats: { type: Number, default: 0 },
+  },
+}, {
+  timestamps: true,
 });
 
-export const DailyLogSchema = z.object({
-  userId: z.string(),
-  date: z.union([z.string(), z.date()]),
-  foodItems: z.array(EmbeddedFoodItemSchema).default([]),
-  totals: z.object({
-    calories: z.number().default(0),
-    protein: z.number().default(0),
-    carbs: z.number().default(0),
-    fats: z.number().default(0)
-  }).default({ calories: 0, protein: 0, carbs: 0, fats: 0 }),
-  createdAt: z.any().optional(),
-  updatedAt: z.any().optional()
-});
+// Compound index for efficient user+date queries
+dailyLogSchema.index({ userId: 1, date: 1 });
 
-export const validateDailyLog = (data) => {
-  return DailyLogSchema.parse(data);
-};
+const DailyLog = mongoose.model('DailyLog', dailyLogSchema);
+export default DailyLog;

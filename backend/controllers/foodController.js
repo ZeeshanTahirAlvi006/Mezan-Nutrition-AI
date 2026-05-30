@@ -1,4 +1,4 @@
-import { db } from '../config/firebase.js';
+import FoodItem from '../models/FoodItem.js';
 import { searchUSDAFoods } from '../services/usdaService.js';
 import { getCachedFoods } from '../utils/foodCache.js';
 
@@ -45,7 +45,7 @@ const searchFood = async (req, res) => {
     const mergedFoods = [...localFoods];
     usdaFoods.forEach(usdaItem => {
       const usdaFdcId = usdaItem._id.replace('usda_', '');
-      const isDuplicate = localFoods.some(local => 
+      const isDuplicate = localFoods.some(local =>
         (local.fdcId && String(local.fdcId) === usdaFdcId) ||
         (local.name || '').toLowerCase() === (usdaItem.name || '').toLowerCase()
       );

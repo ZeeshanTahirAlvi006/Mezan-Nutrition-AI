@@ -12,27 +12,40 @@ const Login = () => {
   const { login, googleLogin } = useContext(AuthContext);
   const navigate = useNavigate();
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleGoogleSuccess = async (googlePayload) => {
     try {
+      setLoading(true);
+      setError("");
       const data = await googleLogin(googlePayload, rememberMe);
-      if (!data.age || !data.weight || !data.height) {
+      // Logic for redirection
+      if (data.role === 'admin') {
+        navigate("/admin");
+      } else if (!data.age || !data.weight || !data.height) {
         navigate("/onboarding");
       } else {
-        navigate(data.role === 'admin' ? '/admin' : '/dashboard');
+        navigate("/dashboard");
       }
     } catch (err) {
-      setError(err.response?.data?.message || err.message || "Google Login failed");
+      setError("Failed to login with Google. Please try again.");
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError("");
     try {
       const data = await login(email, password, rememberMe);
       navigate(data.role === 'admin' ? '/admin' : '/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || err.message || "Failed to login");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -178,10 +191,18 @@ const Login = () => {
             </div>
 
             <button 
-              className="w-full bg-primary hover:bg-primary/95 hover:shadow-md text-white font-headline font-bold py-4 rounded-2xl transition-all transform active:scale-[0.98] shadow-lg mt-4 cursor-pointer" 
+              className="w-full bg-primary hover:bg-primary/95 hover:shadow-md text-white font-headline font-bold py-4 rounded-2xl transition-all transform active:scale-[0.98] shadow-lg mt-4 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2" 
               type="submit"
+              disabled={loading}
             >
-              Log In
+              {loading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  <span>Logging in...</span>
+                </>
+              ) : (
+                "Log In"
+              )}
             </button>
           </form>
 

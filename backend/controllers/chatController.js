@@ -1,4 +1,6 @@
-import { db } from '../config/firebase.js';
+import ChatSession from '../models/ChatSession.js';
+import User from '../models/User.js';
+import DailyLog from '../models/DailyLog.js';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { generateChatResponse } from '../services/aiService.js';
 import { getWeatherByLocation } from '../services/weatherService.js';
@@ -6,7 +8,7 @@ import { fetchUSDANutrition } from '../services/usdaService.js';
 import crypto from 'crypto';
 import { getCachedFoods } from '../utils/foodCache.js';
 
-// In-memory fallback chat session cache for zero-downtime during Firestore quota exhaustion
+// In-memory fallback chat session cache for performance
 const localChatCache = new Map();
 
 // Local basic food items fallback
@@ -23,7 +25,6 @@ const MOCK_FOODS = [
   { name: 'Bread (1 slice)', calories: 80, protein: 3, carbs: 15, fats: 1 }
 ];
 
-// Helper to generate unique IDs for messages
 const generateId = () => crypto.randomBytes(12).toString('hex');
 
 // ── LOCAL NLP FALLBACK DATABASE ──
@@ -46,40 +47,66 @@ const LOCAL_NUTRITION_DB = {
 };
 
 // ── UNIFIED LOCAL-FIRST FOOD LOOKUP ──
-// Searches our Firestore database first, then falls back to USDA FDC API
 const lookupFoodLocalOrUSDA = async (foodName) => {
   if (!foodName) return null;
-  const cleanName = foodName.trim().toLowerCase();
-  
-  // Step 1: Search local Firestore foods collection
+
+  // Smart cleaning function to extract the core food name
+  const getCoreFoodName = (name) => {
+    if (!name) return '';
+    // 1. Remove text inside parentheses (e.g. "Milk (250ml)" -> "Milk")
+    let cleaned = name.replace(/\([^)]*\)/g, '');
+    // 2. Remove trailing portion details after a comma or dash (e.g. "Banana, 1 medium" -> "Banana")
+    cleaned = cleaned.split(/,|\s-\s/)[0];
+    // 3. Remove leading quantities and common units (e.g. "2 large eggs" -> "eggs", "250ml milk" -> "milk")
+    cleaned = cleaned.replace(/^\d+\s*(?:large|medium|small|g|ml|cup|glass|slice|piece|serving|tbsp|tsp|oz)?s?\s+/i, '');
+    return cleaned.trim().toLowerCase();
+  };
+
+  const cleanName = getCoreFoodName(foodName);
+  if (!cleanName) return null;
+
+  // 1. Try exact match in generic LOCAL_NUTRITION_DB first
+  const genericMatchKey = Object.keys(LOCAL_NUTRITION_DB).find(key => key === cleanName || LOCAL_NUTRITION_DB[key].name.toLowerCase() === cleanName);
+  if (genericMatchKey) {
+    const genericMatch = LOCAL_NUTRITION_DB[genericMatchKey];
+    return {
+      name: genericMatch.name,
+      calories: genericMatch.calories,
+      protein: genericMatch.protein,
+      carbs: genericMatch.carbs,
+      fats: genericMatch.fats
+    };
+  }
+
   try {
     const foods = await getCachedFoods();
-    
-    // Try exact name match first
-    let localMatch = foods.find(food => {
-      const name = (food.name || '').toLowerCase();
-      return name === cleanName;
-    });
-    
-    // If no exact match, try substring/keyword match
+
+    // 2. Exact match in local DB
+    let localMatch = foods.find(food => (food.name || '').toLowerCase() === cleanName);
+
+    // 3. Keyword match in local DB
     if (!localMatch) {
       const keywords = cleanName.split(/\s+/).filter(w => w.length > 2);
+
+      const isWordMatch = (fw, kw) => {
+        if (fw === kw) return true;
+        if (fw === kw + 's' || fw + 's' === kw) return true;
+        if (fw === kw + 'es' || fw + 'es' === kw) return true;
+        if (kw.endsWith('y') && fw === kw.slice(0, -1) + 'ies') return true;
+        if (fw.endsWith('y') && kw === fw.slice(0, -1) + 'ies') return true;
+        return false;
+      };
+
       localMatch = foods.find(food => {
         const name = (food.name || '').toLowerCase();
-        return keywords.length > 0 && keywords.every(kw => name.includes(kw));
+        const foodWords = name.split(/[^a-z0-9]+/).filter(Boolean);
+        return keywords.length > 0 && keywords.every(kw => {
+          return foodWords.some(fw => isWordMatch(fw, kw));
+        });
       });
     }
-    
-    // If still no match, try partial inclusion
-    if (!localMatch) {
-      localMatch = foods.find(food => {
-        const name = (food.name || '').toLowerCase();
-        return name.includes(cleanName) || cleanName.includes(name.split(' ')[0]);
-      });
-    }
-    
+
     if (localMatch) {
-      console.log(`[Food Lookup] ✅ Found LOCAL database match for "${foodName}": "${localMatch.name}"`);
       return {
         name: localMatch.name,
         calories: Number(localMatch.calories) || 0,
@@ -91,13 +118,10 @@ const lookupFoodLocalOrUSDA = async (foodName) => {
   } catch (error) {
     console.error(`[Food Lookup] Local database lookup failed for "${foodName}":`, error.message);
   }
-  
-  // Step 2: Fallback to USDA FDC API
-  console.log(`[Food Lookup] No local match for "${foodName}". Querying USDA FDC API...`);
+
   try {
-    const usdaItem = await fetchUSDANutrition(foodName);
+    const usdaItem = await fetchUSDANutrition(cleanName);
     if (usdaItem) {
-      console.log(`[Food Lookup] ✅ Found USDA match for "${foodName}": "${usdaItem.name}"`);
       return {
         name: usdaItem.name,
         calories: usdaItem.calories,
@@ -109,26 +133,21 @@ const lookupFoodLocalOrUSDA = async (foodName) => {
   } catch (error) {
     console.error(`[Food Lookup] USDA lookup failed for "${foodName}":`, error.message);
   }
-  
+
   return null;
 };
 
 // ── LOCAL NLP FALLBACK PARSER ──
 const parseMessageLocally = async (text) => {
   const clean = (text || '').toLowerCase().trim();
-  
-  // Try to find matching food items
   const detectedFoods = [];
+  const unmatchedFoods = [];
   let isWaterLog = false;
-  let waterAmount = 250; // default
+  let waterAmount = 250;
 
-  // Check for water volume keywords
   const mlMatch = clean.match(/(\d+)\s*ml/);
-  if (mlMatch) {
-    waterAmount = parseInt(mlMatch[1]);
-  }
+  if (mlMatch) waterAmount = parseInt(mlMatch[1]);
 
-  // Look for keywords in the text
   for (const key of Object.keys(LOCAL_NUTRITION_DB)) {
     if (clean.includes(key)) {
       const item = LOCAL_NUTRITION_DB[key];
@@ -138,64 +157,34 @@ const parseMessageLocally = async (text) => {
         if (!detectedFoods.some(f => f.name === item.name)) {
           let servings = 1;
           const numberWordMap = { one: 1, two: 2, three: 3, four: 4, five: 5, a: 1, an: 1 };
-          
           const pattern = new RegExp(`(?:(\\d+)|(one|two|three|four|five|an?))\\s*(?:${key}|serving|piece|cup|glass|slice|bowl|g|ml)?\\s*${key}`);
           const match = clean.match(pattern);
           if (match) {
-            if (match[1]) {
-              servings = parseInt(match[1]);
-            } else if (match[2]) {
-              servings = numberWordMap[match[2]];
-            }
+            if (match[1]) servings = parseInt(match[1]);
+            else if (match[2]) servings = numberWordMap[match[2]];
           }
-          
-          // Query local Firestore DB first, then USDA as fallback
-          const lookedUp = await lookupFoodLocalOrUSDA(item.name);
 
+          const lookedUp = await lookupFoodLocalOrUSDA(item.name);
           if (lookedUp) {
-            detectedFoods.push({
-              name: lookedUp.name,
-              calories: lookedUp.calories,
-              protein: lookedUp.protein,
-              carbs: lookedUp.carbs,
-              fats: lookedUp.fats,
-              servings
-            });
+            detectedFoods.push({ ...lookedUp, servings });
           } else {
-            detectedFoods.push({ ...item, servings });
+            unmatchedFoods.push(item.name);
           }
         }
       }
     }
   }
 
-  // If no known food detected, but they said "ate [something]"
   if (detectedFoods.length === 0 && !isWaterLog) {
     const ateMatch = clean.match(/(?:ate|eating|had|logged|log)\s+([a-zA-Z\s]+)(?:for|$|\.)/);
     if (ateMatch) {
       const genericFood = ateMatch[1].replace(/(breakfast|lunch|dinner|snack|today)/g, '').trim();
       if (genericFood && genericFood.length > 2) {
-        // Query local Firestore DB first, then USDA as fallback
         const usdaItem = await lookupFoodLocalOrUSDA(genericFood);
-
         if (usdaItem) {
-          detectedFoods.push({
-            name: usdaItem.name,
-            calories: usdaItem.calories,
-            protein: usdaItem.protein,
-            carbs: usdaItem.carbs,
-            fats: usdaItem.fats,
-            servings: 1
-          });
+          detectedFoods.push({ ...usdaItem, servings: 1 });
         } else {
-          detectedFoods.push({
-            name: genericFood.charAt(0).toUpperCase() + genericFood.slice(1),
-            calories: 250,
-            protein: 15,
-            carbs: 30,
-            fats: 8,
-            servings: 1
-          });
+          unmatchedFoods.push(genericFood);
         }
       }
     }
@@ -206,19 +195,14 @@ const parseMessageLocally = async (text) => {
 
   if (isWaterLog) {
     toolCalls.push({
-      id: `call_${generateId()}`,
-      type: 'function',
-      function: {
-        name: 'log_water_intake',
-        arguments: JSON.stringify({ amount_ml: waterAmount })
-      }
+      id: `call_${generateId()}`, type: 'function',
+      function: { name: 'log_water_intake', arguments: JSON.stringify({ amount_ml: waterAmount }) }
     });
     content = `[Offline Mode] I logged **${waterAmount}ml of Water** to your hydration log! 💧`;
   } else if (detectedFoods.length > 0) {
     const primary = detectedFoods[0];
     toolCalls.push({
-      id: `call_${generateId()}`,
-      type: 'function',
+      id: `call_${generateId()}`, type: 'function',
       function: {
         name: 'log_meal',
         arguments: JSON.stringify({
@@ -231,18 +215,18 @@ const parseMessageLocally = async (text) => {
         })
       }
     });
-
     const foodList = detectedFoods.map(f => `**${f.servings}x ${f.name}** (${f.calories * f.servings} kcal)`).join(', ');
     content = `[Offline Mode] I detected: ${foodList}. I successfully logged the primary item to your diary! 🍳`;
+    if (unmatchedFoods.length > 0) {
+      content += `\n\n*(Note: I couldn't verify the following items in the database: ${unmatchedFoods.map(f => `"${f}"`).join(', ')} so they were not logged.)*`;
+    }
+  } else if (unmatchedFoods.length > 0) {
+    content = `[Offline Mode] I heard you say you had "${unmatchedFoods.join(', ')}", but I couldn't verify this in the database. Please try logging the individual ingredients or searching for the exact food item.`;
   } else {
     content = `[Offline Mode] I heard: "${text}". However, I couldn't identify the specific food item. Try saying something like: "I ate two eggs and a banana."`;
   }
 
-  return {
-    role: 'assistant',
-    content,
-    toolCalls
-  };
+  return { role: 'assistant', content, toolCalls };
 };
 
 // @desc    Create or get a chat session
@@ -250,68 +234,30 @@ const parseMessageLocally = async (text) => {
 const createOrGetSession = async (req, res) => {
   try {
     const { sessionId } = req.body;
-    let sessionData;
-    let actualSessionId;
+    const userId = req.user._id.toString();
 
     if (sessionId) {
-      try {
-        const docRef = db.collection('chatSessions').doc(sessionId);
-        const docSnap = await docRef.get();
-
-        if (!docSnap.exists || docSnap.data().userId !== req.user.uid) {
-          if (localChatCache.has(sessionId)) {
-            sessionData = localChatCache.get(sessionId);
-            actualSessionId = sessionId;
-          } else {
-            return res.status(404).json({ message: "Session not found" });
-          }
-        } else {
-          sessionData = docSnap.data();
-          actualSessionId = docSnap.id;
-          localChatCache.set(actualSessionId, sessionData);
-        }
-      } catch (dbErr) {
-        console.error("Firestore error in createOrGetSession (fetch):", dbErr.message);
+      const session = await ChatSession.findById(sessionId).lean();
+      if (!session || session.userId !== userId) {
         if (localChatCache.has(sessionId)) {
-          sessionData = localChatCache.get(sessionId);
-          actualSessionId = sessionId;
-        } else {
-          sessionData = {
-            userId: req.user.uid,
-            title: "Temporary Conversation",
-            isActive: true,
-            messages: [],
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-          actualSessionId = sessionId;
-          localChatCache.set(actualSessionId, sessionData);
+          return res.json({ _id: sessionId, ...localChatCache.get(sessionId) });
         }
+        return res.status(404).json({ message: "Session not found" });
       }
-    } else {
-      const newSession = {
-        userId: req.user.uid,
-        title: "New Conversation",
-        isActive: true,
-        messages: [],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-
-      try {
-        const docRef = await db.collection('chatSessions').add(newSession);
-        sessionData = newSession;
-        actualSessionId = docRef.id;
-        localChatCache.set(actualSessionId, sessionData);
-      } catch (dbErr) {
-        console.error("Firestore error in createOrGetSession (add):", dbErr.message);
-        actualSessionId = `temp_${crypto.randomBytes(8).toString('hex')}`;
-        sessionData = newSession;
-        localChatCache.set(actualSessionId, sessionData);
-      }
+      localChatCache.set(sessionId, session);
+      return res.json({ _id: session._id, ...session });
     }
 
-    return res.json({ _id: actualSessionId, ...sessionData });
+    const newSession = await ChatSession.create({
+      userId,
+      title: "New Conversation",
+      isActive: true,
+      messages: [],
+    });
+
+    const sessionObj = newSession.toObject();
+    localChatCache.set(newSession._id.toString(), sessionObj);
+    return res.json({ _id: newSession._id, ...sessionObj });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -321,77 +267,37 @@ const createOrGetSession = async (req, res) => {
 // @route   GET /api/chat/session/:sessionId/messages
 const getSessionMessages = async (req, res) => {
   try {
-    try {
-      const docRef = db.collection('chatSessions').doc(req.params.sessionId);
-      const docSnap = await docRef.get();
-
-      if (!docSnap.exists || docSnap.data().userId !== req.user.uid) {
-        if (localChatCache.has(req.params.sessionId)) {
-          const cachedSession = localChatCache.get(req.params.sessionId);
-          return res.json(cachedSession.messages || []);
-        }
-        return res.status(404).json({ message: "Session not found" });
-      }
-
-      const messages = docSnap.data().messages || [];
-      return res.json(messages);
-    } catch (dbErr) {
-      console.error("Firestore error in getSessionMessages:", dbErr.message);
+    const session = await ChatSession.findById(req.params.sessionId).lean();
+    if (!session || session.userId !== req.user._id.toString()) {
       if (localChatCache.has(req.params.sessionId)) {
-        const cachedSession = localChatCache.get(req.params.sessionId);
-        return res.json(cachedSession.messages || []);
+        return res.json(localChatCache.get(req.params.sessionId).messages || []);
       }
-      return res.json([]);
+      return res.status(404).json({ message: "Session not found" });
     }
+    return res.json(session.messages || []);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Generate AI Chat Response (Frontend-driven loop)
+// @desc    Generate AI Chat Response
 // @route   POST /api/chat/message
 const sendMessage = async (req, res) => {
   try {
     const { sessionId, role, content, toolCallId, name, toolCalls, imageUrl } = req.body;
+    const userId = req.user._id.toString();
 
-    if (!sessionId) {
-      return res.status(400).json({ message: "sessionId is required." });
-    }
+    if (!sessionId) return res.status(400).json({ message: "sessionId is required." });
 
-    let session;
-    let sessionRef = null;
+    let session = await ChatSession.findById(sessionId);
     let isFallback = false;
 
-    try {
-      sessionRef = db.collection('chatSessions').doc(sessionId);
-      const sessionSnap = await sessionRef.get();
-
-      if (!sessionSnap.exists || sessionSnap.data().userId !== req.user.uid) {
-        if (localChatCache.has(sessionId)) {
-          session = localChatCache.get(sessionId);
-          isFallback = true;
-        } else {
-          return res.status(404).json({ message: "Session not found" });
-        }
-      } else {
-        session = sessionSnap.data();
-      }
-    } catch (dbErr) {
-      console.error("Firestore error in sendMessage (session load):", dbErr.message);
+    if (!session || session.userId !== userId) {
       if (localChatCache.has(sessionId)) {
         session = localChatCache.get(sessionId);
         isFallback = true;
       } else {
-        session = {
-          userId: req.user.uid,
-          title: "Temporary Conversation",
-          isActive: true,
-          messages: [],
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
-        isFallback = true;
-        localChatCache.set(sessionId, session);
+        return res.status(404).json({ message: "Session not found" });
       }
     }
 
@@ -414,18 +320,18 @@ const sendMessage = async (req, res) => {
     if (toolCalls !== undefined) incomingMessage.toolCalls = toolCalls;
     if (imageUrl !== undefined) incomingMessage.imageUrl = imageUrl;
 
-    let title = session.title;
-    if (session.title === "New Conversation" && role === 'user') {
+    let title = isFallback ? session.title : session.title;
+    if (title === "New Conversation" && role === 'user') {
       const displayContent = content || 'New Image Message';
       title = displayContent.substring(0, 30) + (displayContent.length > 30 ? '...' : '');
     }
 
-    const updatedMessages = [...(session.messages || []), incomingMessage];
+    const messages = isFallback ? (session.messages || []) : session.messages;
+    const updatedMessages = [...messages, incomingMessage];
 
     // Format history for AI Service
     const apiMessages = updatedMessages.map(m => {
       let msgContent = m.content || "";
-
       if (m.imageUrl) {
         msgContent = [
           { type: "text", text: m.content || "Image uploaded" },
@@ -435,19 +341,15 @@ const sendMessage = async (req, res) => {
 
       const msg = { role: m.role };
       if (m.role === 'assistant' && !msgContent) {
-        msg.content = null; // Standardize empty assistant messages to null
+        msg.content = null;
       } else {
         msg.content = msgContent;
       }
 
       if (m.toolCalls && m.toolCalls.length > 0) {
         msg.tool_calls = m.toolCalls.map(tc => ({
-          id: tc.id,
-          type: tc.type || 'function',
-          function: {
-            name: tc.function.name,
-            arguments: tc.function.arguments
-          }
+          id: tc.id, type: tc.type || 'function',
+          function: { name: tc.function.name, arguments: tc.function.arguments }
         }));
       }
 
@@ -457,9 +359,7 @@ const sendMessage = async (req, res) => {
       }
       return msg;
     }).filter(m => {
-      if (m.role === 'assistant') {
-        return m.content || (m.tool_calls && m.tool_calls.length > 0);
-      }
+      if (m.role === 'assistant') return m.content || (m.tool_calls && m.tool_calls.length > 0);
       return true;
     });
 
@@ -467,13 +367,11 @@ const sendMessage = async (req, res) => {
     try {
       aiResponse = await generateChatResponse(req.user, apiMessages);
     } catch (aiErr) {
-      console.warn("[Chat Controller] AI Service key validation failed, initiating local fallback NLP parser:", aiErr.message);
+      console.warn("[Chat Controller] AI Service failed, using local fallback:", aiErr.message);
       aiResponse = await parseMessageLocally(content);
     }
 
     let detectedToolCalls = aiResponse.toolCalls || aiResponse.tool_calls || [];
-
-    // TRUNCATE to 1 tool call because our frontend loop only handles 1 at a time.
     if (detectedToolCalls.length > 1) {
       detectedToolCalls = [detectedToolCalls[0]];
       aiResponse.toolCalls = detectedToolCalls;
@@ -487,35 +385,23 @@ const sendMessage = async (req, res) => {
       createdAt: new Date().toISOString()
     };
 
-    if (detectedToolCalls.length > 0) {
-      aiMessageDoc.toolCalls = detectedToolCalls;
-    }
+    if (detectedToolCalls.length > 0) aiMessageDoc.toolCalls = detectedToolCalls;
 
     updatedMessages.push(aiMessageDoc);
 
-    // Save session to local memory cache
-    session.messages = updatedMessages;
-    session.title = title;
-    session.updatedAt = new Date();
-    localChatCache.set(sessionId, session);
-
-    // Non-blocking/graceful update to Firestore
-    if (!isFallback && sessionRef) {
-      const messagesToSave = updatedMessages.map(m => {
-        const { imageUrl, ...rest } = m;
-        return rest;
-      });
-
-      try {
-        await sessionRef.update({
-          title,
-          messages: messagesToSave,
-          updatedAt: new Date()
-        });
-      } catch (saveErr) {
-        console.error("Firestore background update failed (kept in local cache):", saveErr.message);
-      }
+    // Save to MongoDB
+    if (!isFallback) {
+      session.messages = updatedMessages;
+      session.title = title;
+      session.markModified('messages');
+      await session.save();
     }
+
+    // Update local cache
+    const cacheData = isFallback ? session : session.toObject();
+    cacheData.messages = updatedMessages;
+    cacheData.title = title;
+    localChatCache.set(sessionId, cacheData);
 
     return res.json(aiMessageDoc);
   } catch (error) {
@@ -530,6 +416,7 @@ const executeTool = async (req, res) => {
   try {
     const { toolName, sessionId, toolCallId } = req.body;
     const toolArgs = req.body.toolArgs || {};
+    const userId = req.user._id.toString();
 
     if (!sessionId || !toolCallId) {
       return res.status(400).json({ message: "sessionId and toolCallId are required." });
@@ -537,18 +424,15 @@ const executeTool = async (req, res) => {
 
     let session;
     try {
-      const sessionSnap = await db.collection('chatSessions').doc(sessionId).get();
-      if (!sessionSnap.exists || sessionSnap.data().userId !== req.user.uid) {
+      session = await ChatSession.findById(sessionId).lean();
+      if (!session || session.userId !== userId) {
         if (localChatCache.has(sessionId)) {
           session = localChatCache.get(sessionId);
         } else {
           return res.status(403).json({ message: "Not authorized." });
         }
-      } else {
-        session = sessionSnap.data();
       }
     } catch (dbErr) {
-      console.error("Firestore error in executeTool (session load):", dbErr.message);
       if (localChatCache.has(sessionId)) {
         session = localChatCache.get(sessionId);
       } else {
@@ -557,11 +441,8 @@ const executeTool = async (req, res) => {
     }
 
     const messages = session.messages || [];
-
     const aiMessage = messages.find(m => m.role === 'assistant' && m.toolCalls?.some(tc => tc.id === toolCallId));
-    if (!aiMessage) {
-      return res.status(403).json({ message: "Invalid tool call." });
-    }
+    if (!aiMessage) return res.status(403).json({ message: "Invalid tool call." });
 
     const verifiedToolCall = aiMessage.toolCalls.find(tc => tc.id === toolCallId);
     if (verifiedToolCall.function.name !== toolName) {
@@ -570,12 +451,10 @@ const executeTool = async (req, res) => {
 
     if (toolName === 'search_food_database') {
       const { query } = toolArgs;
-
       let foods = [];
       try {
         foods = await getCachedFoods();
       } catch (dbErr) {
-        console.error("Firestore error in search_food_database (using local fallback):", dbErr.message);
         foods = MOCK_FOODS;
       }
 
@@ -589,19 +468,9 @@ const executeTool = async (req, res) => {
       }
 
       const top3 = foods.slice(0, 3);
-
-      let resultString = '';
-      if (top3.length > 0) {
-        resultString = JSON.stringify(top3.map(f => ({
-          name: f.name,
-          calories: f.calories,
-          protein: f.protein,
-          carbs: f.carbs,
-          fats: f.fats,
-        })));
-      } else {
-        resultString = `No food items found matching '${query}'.`;
-      }
+      const resultString = top3.length > 0
+        ? JSON.stringify(top3.map(f => ({ name: f.name, calories: f.calories, protein: f.protein, carbs: f.carbs, fats: f.fats })))
+        : `No food items found matching '${query}'.`;
 
       return res.json({ result: resultString });
     }
@@ -612,219 +481,154 @@ const executeTool = async (req, res) => {
 
       if (date && typeof date === 'string') {
         const cleanDate = date.toLowerCase().trim();
-        if (cleanDate === 'today') {
-          targetDate = new Date();
-        } else if (cleanDate === 'yesterday') {
-          targetDate = new Date();
-          targetDate.setDate(targetDate.getDate() - 1);
-        } else {
-          const parsed = new Date(date);
-          if (!isNaN(parsed.getTime())) {
-            targetDate = parsed;
-          }
-        }
+        if (cleanDate === 'today') targetDate = new Date();
+        else if (cleanDate === 'yesterday') { targetDate = new Date(); targetDate.setDate(targetDate.getDate() - 1); }
+        else { const parsed = new Date(date); if (!isNaN(parsed.getTime())) targetDate = parsed; }
       }
 
-      targetDate.setHours(0, 0, 0, 0);
+      targetDate.setUTCHours(0, 0, 0, 0);
       const dateString = targetDate.toISOString();
 
-      try {
-        const logSnap = await db.collection('dailyLogs')
-          .where('userId', '==', req.user.uid)
-          .where('date', '==', dateString)
-          .limit(1)
-          .get();
+      const log = await DailyLog.findOne({ userId, date: dateString }).lean();
+      if (!log) return res.json({ result: `No food logs found for ${targetDate.toISOString().split('T')[0]}.` });
 
-        if (logSnap.empty) {
-          return res.json({ result: `No food logs found for ${targetDate.toDateString()}.` });
-        }
-
-        const log = logSnap.docs[0].data();
-
-        const logData = {
-          date: targetDate.toDateString(),
-          foods: (log.foodItems || []).map(item => ({
-            name: item.name || 'Unknown Food',
-            servings: item.servings,
-            calories: item.calories * item.servings,
-            protein: item.protein * item.servings,
-            carbs: item.carbs * item.servings,
-            fats: item.fats * item.servings,
-          })),
-          totals: log.totals
-        };
-
-        return res.json({ result: JSON.stringify(logData) });
-      } catch (dbErr) {
-        console.error("Firestore error in get_user_food_logs:", dbErr.message);
-        return res.json({ result: `Could not retrieve food logs for ${targetDate.toDateString()} due to a temporary database quota or network limit.` });
-      }
+      const logData = {
+        date: targetDate.toDateString(),
+        foods: (log.foodItems || []).map(item => ({
+          name: item.name || 'Unknown Food', servings: item.servings,
+          calories: item.calories * item.servings, protein: item.protein * item.servings,
+          carbs: item.carbs * item.servings, fats: item.fats * item.servings,
+        })),
+        totals: log.totals
+      };
+      return res.json({ result: JSON.stringify(logData) });
     }
 
     if (toolName === 'get_macro_history') {
       const { from, to } = toolArgs;
-      try {
-        const logsSnap = await db.collection('dailyLogs')
-          .where('userId', '==', req.user.uid)
-          .get();
-        
-        let logs = logsSnap.docs.map(doc => doc.data());
-        
-        if (from || to) {
-          const fromTime = from ? new Date(from).setHours(0, 0, 0, 0) : 0;
-          const toTime = to ? new Date(to).setHours(23, 59, 59, 999) : Infinity;
-          logs = logs.filter(log => {
-            const d = new Date(log.date).getTime();
-            return d >= fromTime && d <= toTime;
-          });
-        }
-        
-        const history = logs.map(log => ({
-          date: new Date(log.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-          calories: Math.round(log.totals?.calories || 0),
-          protein: Math.round(log.totals?.protein || 0),
-          carbs: Math.round(log.totals?.carbs || 0),
-          fats: Math.round(log.totals?.fats || 0)
-        }));
-        
-        return res.json({ result: JSON.stringify(history) });
-      } catch (dbErr) {
-        console.error("Firestore error in get_macro_history:", dbErr.message);
-        return res.json({ result: "[]" });
+      const query = { userId };
+      if (from || to) {
+        query.date = {};
+        if (from) query.date.$gte = new Date(from).toISOString();
+        if (to) query.date.$lte = new Date(to).toISOString();
       }
+
+      const logs = await DailyLog.find(query).lean();
+      const history = logs.map(log => ({
+        date: new Date(log.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        calories: Math.round(log.totals?.calories || 0),
+        protein: Math.round(log.totals?.protein || 0),
+        carbs: Math.round(log.totals?.carbs || 0),
+        fats: Math.round(log.totals?.fats || 0)
+      }));
+      return res.json({ result: JSON.stringify(history) });
     }
 
     if (toolName === 'get_streak_and_achievements') {
-      try {
-        const userRef = db.collection('users').doc(req.user.uid);
-        const userDoc = await userRef.get();
-        const userData = userDoc.exists ? userDoc.data() : {};
-        
-        const streakCount = userData.streakCount || 0;
-        
-        const resultData = {
-          streakCount,
-          achievements: [
-            { name: "First Log", description: "Logged your first meal!", unlocked: true },
-            { name: "3-Day Streak", description: "Kept logging for 3 consecutive days!", unlocked: (streakCount >= 3) },
-            { name: "7-Day Streak", description: "Kept logging for 7 consecutive days!", unlocked: (streakCount >= 7) }
-          ]
-        };
-        return res.json({ result: JSON.stringify(resultData) });
-      } catch (dbErr) {
-        console.error("Firestore error in get_streak_and_achievements:", dbErr.message);
-        return res.json({ result: JSON.stringify({ streakCount: 0, achievements: [] }) });
-      }
+      const user = await User.findById(req.user._id).lean();
+      const streakCount = user?.streakCount || 0;
+      const resultData = {
+        streakCount,
+        achievements: [
+          { name: "First Log", description: "Logged your first meal!", unlocked: true },
+          { name: "3-Day Streak", description: "Kept logging for 3 consecutive days!", unlocked: (streakCount >= 3) },
+          { name: "7-Day Streak", description: "Kept logging for 7 consecutive days!", unlocked: (streakCount >= 7) }
+        ]
+      };
+      return res.json({ result: JSON.stringify(resultData) });
     }
 
     if (toolName === 'log_meal') {
-      const { name, calories, protein, carbs, fats, date } = toolArgs;
-      
-      let finalName = name;
-      let finalCalories = calories;
-      let finalProtein = protein;
-      let finalCarbs = carbs;
-      let finalFats = fats;
-      
-      // Cross-verify with local Firestore DB first, then USDA as fallback
-      const verifiedItem = await lookupFoodLocalOrUSDA(name);
+      const { name, calories, protein, carbs, fats, servings, date } = toolArgs;
+      let finalName = name, finalCalories = calories, finalProtein = protein, finalCarbs = carbs, finalFats = fats, finalServings = servings || 1;
 
+      const verifiedItem = await lookupFoodLocalOrUSDA(name);
       if (verifiedItem) {
-        console.log(`[Execute Tool] Cross-verified "${name}" with:`, verifiedItem.name);
         finalName = verifiedItem.name;
+        
+        let scaleRatio = servings || 1;
+        // If servings is 1 (or default) but calories differs from database base, calculate ratio from calories
+        if (scaleRatio === 1) {
+          if (verifiedItem.calories > 0 && calories > 0 && Math.abs(calories - verifiedItem.calories) > 1) {
+            scaleRatio = calories / verifiedItem.calories;
+          } else if (verifiedItem.calories === 0) {
+            // Fallback macro ratios for 0 calorie items
+            if (verifiedItem.protein > 0 && protein > 0) scaleRatio = protein / verifiedItem.protein;
+            else if (verifiedItem.carbs > 0 && carbs > 0) scaleRatio = carbs / verifiedItem.carbs;
+            else if (verifiedItem.fats > 0 && fats > 0) scaleRatio = fats / verifiedItem.fats;
+          }
+        }
+
+        // We store the BASE single-serving macros in DailyLog foodItems array, and scaleRatio as servings count,
+        // so that multiplying them correctly yields the total macros without double-scaling.
         finalCalories = verifiedItem.calories;
         finalProtein = verifiedItem.protein;
         finalCarbs = verifiedItem.carbs;
         finalFats = verifiedItem.fats;
+        finalServings = Number(scaleRatio.toFixed(2));
+      } else {
+        return res.json({ result: `Error: Could not verify '${name}' in the food database. You must log the individual ingredients or use exactly matched names from search_food_database.` });
       }
 
       let parsedDate = new Date();
       if (date && typeof date === 'string') {
         const cleanDate = date.toLowerCase().trim();
-        if (cleanDate === 'today') {
-          parsedDate = new Date();
-        } else if (cleanDate === 'yesterday') {
-          parsedDate = new Date();
-          parsedDate.setDate(parsedDate.getDate() - 1);
-        } else {
-          const parsed = new Date(date);
-          if (!isNaN(parsed.getTime())) {
-            parsedDate = parsed;
-          }
-        }
+        if (cleanDate === 'today') parsedDate = new Date();
+        else if (cleanDate === 'yesterday') { parsedDate = new Date(); parsedDate.setDate(parsedDate.getDate() - 1); }
+        else { const p = new Date(date); if (!isNaN(p.getTime())) parsedDate = p; }
       }
+
+      parsedDate.setUTCHours(0, 0, 0, 0);
 
       const payload = {
         date: parsedDate.toISOString(),
-        foodItems: [{ name: finalName, calories: finalCalories, protein: finalProtein, carbs: finalCarbs, fats: finalFats, servings: 1 }]
+        foodItems: [{ name: finalName, calories: finalCalories, protein: finalProtein, carbs: finalCarbs, fats: finalFats, servings: finalServings }]
       };
 
       const mockReq = { body: payload, user: req.user };
-      let logData = null;
-      let errorData = null;
+      let logData = null, errorData = null;
       const mockRes = {
         status: () => mockRes,
-        json: (data) => {
-          if (data.message) {
-            errorData = data;
-          } else {
-            logData = data;
-          }
-          return mockRes;
-        }
+        json: (data) => { if (data.message) errorData = data; else logData = data; return mockRes; }
       };
 
-      // Import createDailyLog dynamically to prevent circular dependencies if they ever occur
       const { createDailyLog } = await import('./logController.js');
       await createDailyLog(mockReq, mockRes);
 
-      if (errorData) {
-        return res.json({ result: `Failed to log meal: ${JSON.stringify(errorData)}` });
-      }
-      return res.json({ result: `Successfully logged ${name} (${calories} kcal) to the diary for ${payload.date}.` });
+      if (errorData) return res.json({ result: `Failed to log meal: ${JSON.stringify(errorData)}` });
+      const totalLoggedCalories = Math.round(finalCalories * finalServings);
+      return res.json({ result: `Successfully logged ${finalName} (${totalLoggedCalories} kcal) to the diary for ${payload.date.split('T')[0]}.` });
     }
 
     if (toolName === 'get_weather_forecast') {
-      const userDoc = await db.collection('users').doc(req.user.uid).get();
-      const location = toolArgs.location || (userDoc.exists ? userDoc.data().location : 'UAE') || 'UAE';
+      const user = await User.findById(req.user._id).lean();
+      const location = toolArgs.location || user?.location || 'UAE';
       const weatherData = await getWeatherByLocation(location);
       return res.json({ result: JSON.stringify(weatherData) });
     }
 
     if (toolName === 'search_knowledge_base') {
       const { query } = toolArgs;
-
       try {
         if (!process.env.PINECONE_API_KEY) {
           return res.json({ result: "Pinecone API Key is missing. Cannot search knowledge base." });
         }
 
         const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
-
-        // Use Pinecone's built-in embedding
         const embedResponse = await pinecone.inference.embed({
           model: 'multilingual-e5-large',
           inputs: [query],
           parameters: { inputType: 'query', truncate: 'END' }
         });
         const queryVector = embedResponse.data[0].values;
-
         const index = pinecone.Index('nutriguide-kb');
-
-        const queryResponse = await index.query({
-          vector: queryVector,
-          topK: 4,
-          includeMetadata: true
-        });
+        const queryResponse = await index.query({ vector: queryVector, topK: 4, includeMetadata: true });
 
         if (!queryResponse.matches || queryResponse.matches.length === 0) {
           return res.json({ result: "No relevant information found in the knowledge base." });
         }
 
-        const results = queryResponse.matches.map(match => {
-          return `[Source: ${match.metadata.source}]: ${match.metadata.text}`;
-        }).join('\n\n');
-
+        const results = queryResponse.matches.map(match => `[Source: ${match.metadata.source}]: ${match.metadata.text}`).join('\n\n');
         return res.json({ result: results });
       } catch (err) {
         console.error('Pinecone Search Error:', err);
@@ -832,7 +636,24 @@ const executeTool = async (req, res) => {
       }
     }
 
-    // Graceful fallback for newly declared or offline development tools
+    if (toolName === 'generate_meal_plan') {
+      let foods = [];
+      try {
+        foods = await getCachedFoods();
+      } catch (dbErr) {
+        foods = MOCK_FOODS;
+      }
+
+      // Select 10 random foods from the database to give the AI building blocks
+      const shuffled = foods.sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, 15);
+
+      const resultString = `Here are some verified healthy food ingredients from the database you can use to construct the meal plan. YOU MUST ONLY USE THESE OR EXACTLY MATCHED FOODS FROM search_food_database in your meal plan suggestion so that logging them works accurately: ${JSON.stringify(selected.map(f => ({ name: f.name, calories: f.calories, protein: f.protein, carbs: f.carbs, fats: f.fats })))}`;
+
+      return res.json({ result: resultString });
+    }
+
+    // Graceful fallback for unknown tools
     console.warn(`[Execute Tool] Bypassing offline/development tool: "${toolName}"`);
     return res.json({
       result: `Tool "${toolName}" is currently offline or in mock development phase. Proceed with the conversation using general knowledge, available data, and user profile targets.`
@@ -848,36 +669,29 @@ const submitFeedback = async (req, res) => {
   try {
     const { feedback } = req.body;
     const { messageId } = req.params;
+    const userId = req.user._id.toString();
 
-    // We must find which session this message belongs to.
-    // In Firestore, if messages are embedded, we have to query sessions where messages array contains an object with _id = messageId
-    // Alternatively, we require frontend to pass sessionId. The legacy route doesn't.
-    // Let's do a broad search since chatSessions is relatively small per user.
-    const sessionsSnap = await db.collection('chatSessions').where('userId', '==', req.user.uid).get();
+    const sessions = await ChatSession.find({ userId });
 
-    let targetSessionRef = null;
-    let targetSessionData = null;
+    let targetSession = null;
     let messageIndex = -1;
 
-    for (const doc of sessionsSnap.docs) {
-      const data = doc.data();
-      const idx = (data.messages || []).findIndex(m => m._id === messageId);
+    for (const session of sessions) {
+      const idx = (session.messages || []).findIndex(m => m._id === messageId);
       if (idx !== -1) {
-        targetSessionRef = doc.ref;
-        targetSessionData = data;
+        targetSession = session;
         messageIndex = idx;
         break;
       }
     }
 
-    if (!targetSessionRef) {
-      return res.status(404).json({ message: "Message not found" });
-    }
+    if (!targetSession) return res.status(404).json({ message: "Message not found" });
 
-    targetSessionData.messages[messageIndex].feedback = feedback;
-    await targetSessionRef.update({ messages: targetSessionData.messages });
+    targetSession.messages[messageIndex].feedback = feedback;
+    targetSession.markModified('messages');
+    await targetSession.save();
 
-    res.json({ success: true, message: targetSessionData.messages[messageIndex] });
+    res.json({ success: true, message: targetSession.messages[messageIndex] });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -1,21 +1,38 @@
-import { z } from 'zod';
+import mongoose from 'mongoose';
 
-export const FoodItemSchema = z.object({
-  name: z.string(),
-  country: z.string().default('Global'),
-  calories: z.number(),
-  protein: z.number().optional(),
-  carbs: z.number().optional(),
-  fats: z.number().optional(),
-  fiber: z.number().optional(),
-  vitamin_A: z.number().optional(),
-  vitamin_C: z.number().optional(),
-  sodium: z.number().optional(),
-  sugar: z.number().optional(),
-  createdAt: z.date().optional(),
-  updatedAt: z.date().optional()
+const foodItemSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  country: {
+    type: String,
+    default: 'Global',
+    trim: true,
+  },
+  calories: { type: Number, required: true },
+  protein: { type: Number, default: 0 },
+  carbs: { type: Number, default: 0 },
+  fats: { type: Number, default: 0 },
+  fiber: { type: Number, default: 0 },
+  sugar: { type: Number, default: 0 },
+  sodium: { type: Number, default: 0 },
+  vitamin_A: { type: Number, default: 0 },
+  vitamin_C: { type: Number, default: 0 },
+  fdcId: { type: Number, default: null },
+  usdaOfficialName: { type: String, default: null },
+  verifiedWithUSDA: { type: Boolean, default: false },
+  barcode: { type: String, default: null },
+  category: { type: String, default: null },
+}, {
+  timestamps: true,
 });
 
-export const validateFoodItem = (data) => {
-  return FoodItemSchema.parse(data);
-};
+// Text index for search
+foodItemSchema.index({ name: 'text' });
+// Index for country filtering
+foodItemSchema.index({ country: 1 });
+
+const FoodItem = mongoose.model('FoodItem', foodItemSchema);
+export default FoodItem;
