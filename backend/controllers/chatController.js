@@ -552,7 +552,7 @@ const executeTool = async (req, res) => {
     }
 
     if (toolName === 'log_meal') {
-      const { name, calories, protein, carbs, fats, servings, date } = toolArgs;
+      const { name, calories, protein, carbs, fats, servings, date, confirm_duplicate } = toolArgs;
       let finalName = name, finalCalories = calories, finalProtein = protein, finalCarbs = carbs, finalFats = fats, finalServings = servings || 1;
 
       const verifiedItem = await lookupFoodLocalOrUSDA(name);
@@ -588,14 +588,16 @@ const executeTool = async (req, res) => {
       const dateString = parsedDate.toISOString();
 
       // Duplicate guard: check if this food was logged in the last 5 minutes
-      const existingLog = await DailyLog.findOne({ userId, date: dateString }).lean();
-      if (existingLog && existingLog.updatedAt) {
-        const timeDiff = Date.now() - new Date(existingLog.updatedAt).getTime();
-        const hasRecentMatch = existingLog.foodItems.some(
-          item => item.name.toLowerCase() === finalName.toLowerCase()
-        );
-        if (timeDiff < 5 * 60 * 1000 && hasRecentMatch) {
-          return res.json({ result: `Warning: You are attempting to log '${finalName}' which was already logged within the last 5 minutes. Please ask the user to confirm if they had a second serving before proceeding.` });
+      if (!confirm_duplicate) {
+        const existingLog = await DailyLog.findOne({ userId, date: dateString }).lean();
+        if (existingLog && existingLog.updatedAt) {
+          const timeDiff = Date.now() - new Date(existingLog.updatedAt).getTime();
+          const hasRecentMatch = existingLog.foodItems.some(
+            item => item.name.toLowerCase() === finalName.toLowerCase()
+          );
+          if (timeDiff < 5 * 60 * 1000 && hasRecentMatch) {
+            return res.json({ result: `Warning: You are attempting to log '${finalName}' which was already logged within the last 5 minutes. Please ask the user to confirm if they had a second serving before proceeding.` });
+          }
         }
       }
 
