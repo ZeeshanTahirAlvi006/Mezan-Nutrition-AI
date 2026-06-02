@@ -81,7 +81,7 @@ const getCompletionWithFallback = async (params) => {
       if (provider.name === 'mistral') {
         const mistralMessages = messages.map(m => {
           const mapped = { role: m.role };
-          
+
           if (m.content !== undefined && m.content !== null && m.content !== '') {
             mapped.content = m.content;
           } else if (m.role === 'assistant') {
@@ -187,10 +187,10 @@ const getCompletionWithFallback = async (params) => {
         // Configure system instruction on model if present
         const genModel = systemInstruction
           ? genAI.getGenerativeModel({
-              model: provider.model,
-              tools: tools && tools.length > 0 ? [{ functionDeclarations: tools.map(t => t.function) }] : undefined,
-              systemInstruction: { parts: [{ text: systemInstruction }] }
-            })
+            model: provider.model,
+            tools: tools && tools.length > 0 ? [{ functionDeclarations: tools.map(t => t.function) }] : undefined,
+            systemInstruction: { parts: [{ text: systemInstruction }] }
+          })
           : model;
 
         const result = await withTimeout(
@@ -268,7 +268,8 @@ const generateChatResponse = async (user, messages) => {
     try {
       const location = user.location || 'UAE';
       const cachedWeather = getWeatherCached(location);
-      
+
+
       if (cachedWeather) {
         weatherContext = buildWeatherContext(cachedWeather);
         // If the cache is expired, trigger background revalidation
