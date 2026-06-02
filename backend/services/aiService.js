@@ -60,15 +60,19 @@ const getCompletionWithFallback = async (params) => {
   const hasImage = messages.some((m) => Array.isArray(m.content));
 
   let providers = [
+    { name: 'openrouter', model: 'google/gemini-2.5-flash' },
     { name: 'mistral', model: 'mistral-small-latest' },
-    { name: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' },
+    { name: 'openrouter_free', model: 'openrouter/free' },
     { name: 'groq', model: 'llama-3.3-70b-versatile' },
     { name: 'gemini', model: 'gemini-1.5-flash' },
   ];
 
   if (hasImage) {
     console.log('[AI Service] Image detected → routing to vision provider (openrouter).');
-    providers = [{ name: 'openrouter', model: 'nvidia/nemotron-nano-12b-v2-vl:free' }];
+    providers = [
+      { name: 'openrouter', model: 'google/gemini-2.5-flash' },
+      { name: 'openrouter_free', model: 'nvidia/nemotron-nano-12b-v2-vl:free' }
+    ];
   }
 
   let lastError;
@@ -227,7 +231,7 @@ const getCompletionWithFallback = async (params) => {
       }
 
       // ── OpenRouter ───────────────────────────
-      if (provider.name === 'openrouter') {
+      if (provider.name.startsWith('openrouter')) {
         const res = await withTimeout(
           openRouterClient.chat.completions.create({
             model: provider.model,
@@ -237,9 +241,10 @@ const getCompletionWithFallback = async (params) => {
                 ? { type: 'json_object' }
                 : undefined,
             tools,
+            max_tokens: 2000, // Prevent worst-case 65k token allocation block
           }),
           hasImage ? 20000 : 15000,
-          'openrouter'
+          provider.name
         );
         return { choices: [{ message: res.choices[0].message }] };
       }
