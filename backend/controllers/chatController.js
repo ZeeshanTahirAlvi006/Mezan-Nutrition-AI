@@ -381,7 +381,14 @@ const sendMessage = async (req, res) => {
       aiResponse = await generateChatResponse(req.user, apiMessages);
     } catch (aiErr) {
       console.warn("[Chat Controller] AI Service failed, using local fallback:", aiErr.message);
-      aiResponse = await parseMessageLocally(content);
+      if (role === 'tool') {
+        aiResponse = {
+          role: 'assistant',
+          content: "I've received the database update, but my connection to the AI engine is currently offline. Please ask me to log or check something directly, and I'll do my best to assist you in offline fallback mode! 🍃"
+        };
+      } else {
+        aiResponse = await parseMessageLocally(content);
+      }
     }
 
     let detectedToolCalls = aiResponse.toolCalls || aiResponse.tool_calls || [];
