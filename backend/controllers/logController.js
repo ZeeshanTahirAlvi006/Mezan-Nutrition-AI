@@ -1,6 +1,7 @@
 import DailyLog from '../models/DailyLog.js';
 import { recalculateStreak } from '../utils/streak.js';
 import { getCachedFoods } from '../utils/foodCache.js';
+import { resolveTimezone, getNormalizedLocalDate } from '../utils/dateUtils.js';
 
 // @desc    Create or update daily log
 // @route   POST /api/logs/daily
@@ -11,11 +12,8 @@ const createDailyLog = async (req, res) => {
     if (!date) {
       return res.status(400).json({ message: 'Date is required.' });
     }
-    const parsedDate = new Date(date);
-    if (isNaN(parsedDate.getTime())) {
-      return res.status(400).json({ message: 'Invalid date format.' });
-    }
-    parsedDate.setUTCHours(0, 0, 0, 0);
+    const timezone = resolveTimezone(req, req.user);
+    const parsedDate = getNormalizedLocalDate(date, timezone);
     const dateString = parsedDate.toISOString();
 
     if (!foodItems || !Array.isArray(foodItems)) {
@@ -129,11 +127,8 @@ const createDailyLog = async (req, res) => {
 // @route   GET /api/logs/daily/:date
 const getDailyLog = async (req, res) => {
   try {
-    const parsedDate = new Date(req.params.date);
-    if (isNaN(parsedDate.getTime())) {
-      return res.status(400).json({ message: 'Invalid date format.' });
-    }
-    parsedDate.setUTCHours(0, 0, 0, 0);
+    const timezone = resolveTimezone(req, req.user);
+    const parsedDate = getNormalizedLocalDate(req.params.date, timezone);
     const dateString = parsedDate.toISOString();
     const userId = req.user._id.toString();
 
@@ -154,27 +149,23 @@ const getDailyLog = async (req, res) => {
 // @route   GET /api/logs/weekly
 const getWeeklyLogs = async (req, res) => {
   try {
-    let start = new Date();
-    start.setDate(start.getDate() - 6);
-    start.setUTCHours(0, 0, 0, 0);
-
-    let end = new Date();
+    const timezone = resolveTimezone(req, req.user);
+    
+    // Default to the last 7 days in the user's timezone
+    let start = getNormalizedLocalDate('today', timezone);
+    start.setUTCDate(start.getUTCDate() - 6);
+    
+    let end = getNormalizedLocalDate('today', timezone);
+    // Include the full day by ending at 23:59:59.999 UTC
     end.setUTCHours(23, 59, 59, 999);
 
     const { startDate, endDate } = req.query;
     if (startDate) {
-      const parsedStart = new Date(startDate);
-      if (!isNaN(parsedStart.getTime())) {
-        start = parsedStart;
-        start.setUTCHours(0, 0, 0, 0);
-      }
+      start = getNormalizedLocalDate(startDate, timezone);
     }
     if (endDate) {
-      const parsedEnd = new Date(endDate);
-      if (!isNaN(parsedEnd.getTime())) {
-        end = parsedEnd;
-        end.setUTCHours(23, 59, 59, 999);
-      }
+      end = getNormalizedLocalDate(endDate, timezone);
+      end.setUTCHours(23, 59, 59, 999);
     }
 
     const startStr = start.toISOString();

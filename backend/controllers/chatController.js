@@ -7,6 +7,7 @@ import { getWeatherByLocation } from '../services/weatherService.js';
 import { fetchUSDANutrition } from '../services/usdaService.js';
 import crypto from 'crypto';
 import { getCachedFoods } from '../utils/foodCache.js';
+import { resolveTimezone, getNormalizedLocalDate } from '../utils/dateUtils.js';
 
 // In-memory fallback chat session cache for performance
 const localChatCache = new Map();
@@ -248,6 +249,18 @@ const createOrGetSession = async (req, res) => {
       return res.json({ _id: session._id, ...session });
     }
 
+    // Check if there is an existing empty active session to reuse and prevent duplicates
+    const existingEmptySession = await ChatSession.findOne({
+      userId,
+      isActive: true,
+      messages: { $size: 0 }
+    });
+    if (existingEmptySession) {
+      const sessionObj = existingEmptySession.toObject();
+      localChatCache.set(existingEmptySession._id.toString(), sessionObj);
+      return res.json({ _id: existingEmptySession._id, ...sessionObj });
+    }
+
     const newSession = await ChatSession.create({
       userId,
       title: "New Conversation",
@@ -477,20 +490,12 @@ const executeTool = async (req, res) => {
 
     if (toolName === 'get_user_food_logs') {
       const { date } = toolArgs;
-      let targetDate = new Date();
-
-      if (date && typeof date === 'string') {
-        const cleanDate = date.toLowerCase().trim();
-        if (cleanDate === 'today') targetDate = new Date();
-        else if (cleanDate === 'yesterday') { targetDate = new Date(); targetDate.setDate(targetDate.getDate() - 1); }
-        else { const parsed = new Date(date); if (!isNaN(parsed.getTime())) targetDate = parsed; }
-      }
-
-      targetDate.setUTCHours(0, 0, 0, 0);
+      const timezone = resolveTimezone(req, req.user);
+      const targetDate = getNormalizedLocalDate(date || 'today', timezone);
       const dateString = targetDate.toISOString();
 
       const log = await DailyLog.findOne({ userId, date: dateString }).lean();
-      if (!log) return res.json({ result: `No food logs found for ${targetDate.toISOString().split('T')[0]}.` });
+      if (!log) return res.json({ result: `No food logs found for ${dateString.split('T')[0]}.` });
 
       const logData = {
         date: targetDate.toDateString(),
@@ -506,11 +511,12 @@ const executeTool = async (req, res) => {
 
     if (toolName === 'get_macro_history') {
       const { from, to } = toolArgs;
+      const timezone = resolveTimezone(req, req.user);
       const query = { userId };
       if (from || to) {
         query.date = {};
-        if (from) query.date.$gte = new Date(from).toISOString();
-        if (to) query.date.$lte = new Date(to).toISOString();
+        if (from) query.date.$gte = getNormalizedLocalDate(from, timezone).toISOString();
+        if (to) query.date.$lte = getNormalizedLocalDate(to, timezone).toISOString();
       }
 
       const logs = await DailyLog.find(query).lean();
@@ -570,18 +576,24 @@ const executeTool = async (req, res) => {
         return res.json({ result: `Error: Could not verify '${name}' in the food database. You must log the individual ingredients or use exactly matched names from search_food_database.` });
       }
 
-      let parsedDate = new Date();
-      if (date && typeof date === 'string') {
-        const cleanDate = date.toLowerCase().trim();
-        if (cleanDate === 'today') parsedDate = new Date();
-        else if (cleanDate === 'yesterday') { parsedDate = new Date(); parsedDate.setDate(parsedDate.getDate() - 1); }
-        else { const p = new Date(date); if (!isNaN(p.getTime())) parsedDate = p; }
+      const timezone = resolveTimezone(req, req.user);
+      const parsedDate = getNormalizedLocalDate(date || 'today', timezone);
+      const dateString = parsedDate.toISOString();
+
+      // Duplicate guard: check if this food was logged in the last 5 minutes
+      const existingLog = await DailyLog.findOne({ userId, date: dateString }).lean();
+      if (existingLog && existingLog.updatedAt) {
+        const timeDiff = Date.now() - new Date(existingLog.updatedAt).getTime();
+        const hasRecentMatch = existingLog.foodItems.some(
+          item => item.name.toLowerCase() === finalName.toLowerCase()
+        );
+        if (timeDiff < 5 * 60 * 1000 && hasRecentMatch) {
+          return res.json({ result: `Warning: You are attempting to log '${finalName}' which was already logged within the last 5 minutes. Please ask the user to confirm if they had a second serving before proceeding.` });
+        }
       }
 
-      parsedDate.setUTCHours(0, 0, 0, 0);
-
       const payload = {
-        date: parsedDate.toISOString(),
+        date: dateString,
         foodItems: [{ name: finalName, calories: finalCalories, protein: finalProtein, carbs: finalCarbs, fats: finalFats, servings: finalServings }]
       };
 
