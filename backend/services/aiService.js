@@ -60,10 +60,10 @@ const getCompletionWithFallback = async (params) => {
   const hasImage = messages.some((m) => Array.isArray(m.content));
 
   let providers = [
-    { name: 'gemini', model: 'gemini-1.5-flash' },
+    { name: 'mistral', model: 'mistral-small-latest' },
     { name: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' },
     { name: 'groq', model: 'llama-3.3-70b-versatile' },
-    { name: 'mistral', model: 'mistral-small-latest' },
+    { name: 'gemini', model: 'gemini-1.5-flash' },
   ];
 
   if (hasImage) {
@@ -238,7 +238,7 @@ const getCompletionWithFallback = async (params) => {
                 : undefined,
             tools,
           }),
-          8000,
+          hasImage ? 20000 : 15000,
           'openrouter'
         );
         return { choices: [{ message: res.choices[0].message }] };
