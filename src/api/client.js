@@ -19,6 +19,8 @@ client.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Automatically attach client local timezone
+    config.headers['x-timezone'] = Intl.DateTimeFormat().resolvedOptions().timeZone;
     return config;
   },
   (error) => Promise.reject(error)
