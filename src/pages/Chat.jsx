@@ -491,17 +491,51 @@ const Chat = () => {
           {/* Typing Indicator */}
           {loading && !agentState?.isExecuting && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
               className="flex items-start gap-3"
             >
-              <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center flex-shrink-0 shadow-sm">
-                <span className="material-symbols-outlined text-on-primary-container text-[18px] fill-icon">smart_toy</span>
+              {/* Bot Avatar with Active Glowing Dot */}
+              <div className="relative w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border bg-white border-emerald-100/50 shadow-sm text-emerald-600">
+                <span className="material-symbols-outlined text-emerald-600 text-[18px] fill-icon">smart_toy</span>
+                <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
               </div>
-              <div className="bg-surface-container-lowest p-5 rounded-2xl rounded-tl-none shadow-sm border border-outline-variant/30 flex space-x-2">
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+              
+              {/* Glassmorphic Thinking Canvas */}
+              <div className="flex flex-col gap-2">
+                <div className="bg-gradient-to-br from-emerald-50/50 via-white to-teal-50/30 p-5 rounded-2xl rounded-tl-[4px] shadow-[0_4px_20px_rgba(0,0,0,0.015)] border border-emerald-100/40 backdrop-blur-md flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 h-3">
+                    {[0, 1, 2].map((index) => (
+                      <motion.div
+                        key={index}
+                        animate={{
+                          scale: [0.8, 1.2, 0.8],
+                          opacity: [0.35, 1, 0.35],
+                          y: [0, -3, 0]
+                        }}
+                        transition={{
+                          repeat: Infinity,
+                          duration: 1.2,
+                          ease: "easeInOut",
+                          delay: index * 0.2
+                        }}
+                        className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                      />
+                    ))}
+                  </div>
+                </div>
+                {/* State-aware subtitle message */}
+                <motion.span 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: [0.4, 0.8, 0.4] }}
+                  transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                  className="text-[10px] font-semibold text-emerald-700/60 uppercase tracking-widest ml-1"
+                >
+                  Nova is formulating plan...
+                </motion.span>
               </div>
             </motion.div>
           )}
