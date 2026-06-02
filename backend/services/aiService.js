@@ -60,10 +60,10 @@ const getCompletionWithFallback = async (params) => {
   const hasImage = messages.some((m) => Array.isArray(m.content));
 
   let providers = [
-    { name: 'mistral', model: 'mistral-small-latest' },
-    { name: 'groq', model: 'llama-3.3-70b-versatile' },
     { name: 'gemini', model: 'gemini-1.5-flash' },
     { name: 'openrouter', model: 'google/gemini-2.0-flash-001' },
+    { name: 'groq', model: 'llama-3.3-70b-versatile' },
+    { name: 'mistral', model: 'mistral-small-latest' },
   ];
 
   if (hasImage) {
@@ -139,23 +139,91 @@ const getCompletionWithFallback = async (params) => {
 
       // ── Gemini ───────────────────────────────
       if (provider.name === 'gemini') {
-        const model = genAI.getGenerativeModel({ model: provider.model });
-        const history = messages.slice(0, -1).map((m) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        }));
-        const chat = model.startChat({ history });
-        const lastMsg = messages[messages.length - 1].content;
-        
-        const text = await withTimeout(
-          (async () => {
-            const result = await chat.sendMessage(lastMsg);
-            return result.response.text();
-          })(),
+        const model = genAI.getGenerativeModel({
+          model: provider.model,
+          tools: tools && tools.length > 0 ? [{ functionDeclarations: tools.map(t => t.function) }] : undefined
+        });
+
+        // Map system/user/assistant/tool messages to Gemini contents schema
+        const contents = [];
+        let systemInstruction = undefined;
+
+        for (const m of messages) {
+          if (m.role === 'system') {
+            systemInstruction = m.content;
+            continue;
+          }
+
+          const role = m.role === 'assistant' ? 'model' : 'user';
+          const parts = [];
+
+          if (m.content) {
+            parts.push({ text: m.content });
+          }
+
+          if (m.tool_calls && m.tool_calls.length > 0) {
+            m.tool_calls.forEach(tc => {
+              parts.push({
+                functionCall: {
+                  name: tc.function.name,
+                  args: typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments
+                }
+              });
+            });
+          }
+
+          if (m.role === 'tool') {
+            parts.push({
+              functionResponse: {
+                name: m.name,
+                response: { result: m.content }
+              }
+            });
+          }
+
+          contents.push({ role, parts });
+        }
+
+        // Configure system instruction on model if present
+        const genModel = systemInstruction
+          ? genAI.getGenerativeModel({
+              model: provider.model,
+              tools: tools && tools.length > 0 ? [{ functionDeclarations: tools.map(t => t.function) }] : undefined,
+              systemInstruction: { parts: [{ text: systemInstruction }] }
+            })
+          : model;
+
+        const result = await withTimeout(
+          genModel.generateContent({ contents }),
           8000,
           'gemini'
         );
-        return { choices: [{ message: { role: 'assistant', content: text } }] };
+
+        let responseText = "";
+        try {
+          responseText = result.response.text();
+        } catch (e) {
+          // If response has only function call, result.response.text() can throw
+        }
+
+        const functionCalls = result.response.functionCalls();
+        const message = {
+          role: 'assistant',
+          content: responseText || ""
+        };
+
+        if (functionCalls && functionCalls.length > 0) {
+          message.tool_calls = functionCalls.map(fc => ({
+            id: `call_${Math.random().toString(36).substring(2, 15)}`,
+            type: 'function',
+            function: {
+              name: fc.name,
+              arguments: JSON.stringify(fc.args)
+            }
+          }));
+        }
+
+        return { choices: [{ message }] };
       }
 
       // ── OpenRouter ───────────────────────────
