@@ -61,14 +61,14 @@ const getCompletionWithFallback = async (params) => {
 
   let providers = [
     { name: 'gemini', model: 'gemini-1.5-flash' },
-    { name: 'openrouter', model: 'google/gemini-2.0-flash-001' },
+    { name: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' },
     { name: 'groq', model: 'llama-3.3-70b-versatile' },
     { name: 'mistral', model: 'mistral-small-latest' },
   ];
 
   if (hasImage) {
     console.log('[AI Service] Image detected → routing to vision provider (openrouter).');
-    providers = [{ name: 'openrouter', model: 'google/gemini-2.0-flash-001' }];
+    providers = [{ name: 'openrouter', model: 'nvidia/nemotron-nano-12b-v2-vl:free' }];
   }
 
   let lastError;
