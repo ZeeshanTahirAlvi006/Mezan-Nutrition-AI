@@ -55,7 +55,7 @@ const withTimeout = (promise, ms, providerName) => {
  * On 429 / 500 / 503 / 408 (Timeout), automatically moves to the next one.
  */
 const getCompletionWithFallback = async (params) => {
-  const { messages, response_format, tools } = params;
+  const { messages, response_format, tools, max_tokens } = params;
 
   const hasImage = messages.some((m) => Array.isArray(m.content));
 
@@ -241,7 +241,7 @@ const getCompletionWithFallback = async (params) => {
                 ? { type: 'json_object' }
                 : undefined,
             tools,
-            max_tokens: 2000, // Prevent worst-case 65k token allocation block
+            max_tokens: max_tokens || 2000, // Prevent worst-case 65k token allocation block
           }),
           hasImage ? 20000 : 15000,
           provider.name

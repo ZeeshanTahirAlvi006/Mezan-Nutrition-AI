@@ -134,6 +134,7 @@ Return EXACTLY this JSON structure:
     const response = await getCompletionWithFallback({
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' },
+      max_tokens: 3500,
     });
 
     const raw = response.choices[0].message.content;
