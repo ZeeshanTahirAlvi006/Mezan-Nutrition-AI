@@ -59,7 +59,7 @@ const MessageBubble = ({ message }) => {
         )}
         
         {/* Content Area */}
-        <div className="flex flex-col gap-2 max-w-full overflow-hidden">
+        <div className={`flex flex-col gap-2 max-w-full overflow-hidden ${message.role === "user" ? "items-end" : "items-start"}`}>
           <div
             className={`p-5 rounded-2xl ${
               message.role === "user" 
