@@ -624,6 +624,9 @@ const Chat = () => {
               <span className="material-symbols-outlined fill-icon text-[20px]">send</span>
             </button>
           </form>
+          <p className="text-[10px] text-center text-emerald-950/45 mt-2.5 font-semibold tracking-wide">
+            Nova can make mistakes. Verify important medical and nutritional information.
+          </p>
         </div>
       </div>
 

@@ -580,7 +580,7 @@ const executeTool = async (req, res) => {
         finalFats = verifiedItem.fats;
         finalServings = Number(scaleRatio.toFixed(2));
       } else {
-        return res.json({ result: `Error: Could not verify '${name}' in the food database. You must log the individual ingredients or use exactly matched names from search_food_database.` });
+        return res.json({ result: `Error: '${name}' does not exist in the database. Please add it manually.` });
       }
 
       const timezone = resolveTimezone(req, req.user);

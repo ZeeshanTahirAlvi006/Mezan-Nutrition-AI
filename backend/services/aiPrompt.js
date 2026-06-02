@@ -248,11 +248,8 @@ GENERAL RULES:
 - Tool returns no result:
   State clearly "I couldn't find data for that" then proceed with best general knowledge.
 
-- Logging a complex meal (e.g. "Grilled Chicken and Veggie Bowl") fails verification in the database:
-  State clearly to the user that the combined complex meal could not be verified in the food database.
-  Break down the meal into its individual ingredients (e.g. "Grilled Chicken Breast", "White Rice", "Steamed Vegetables").
-  Calculate/estimate the nutrients for each ingredient separately on your own.
-  Call \`log_meal\` separately for each individual ingredient so they are logged accurately under their real names.
+- Logging a food item that does not exist or fails verification in the database:
+  Do NOT guess the macros or attempt to bypass database checks. State clearly to the user that the item does not exist in the database and ask them to please add it manually.
 
 - User seems demotivated or frustrated:
   Call get_streak_and_achievements, lead with a positive observation,
