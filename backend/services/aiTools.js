@@ -26,6 +26,7 @@ export const buildTools = () => [
           meal_type: { type: 'string', enum: ['breakfast', 'lunch', 'dinner', 'snack', 'pre_workout', 'post_workout'] },
           quantity: { type: 'string', description: 'Portion description (e.g. "1 plate", "200g", "2 pieces")' },
           servings: { type: 'number', description: 'Number of servings logged (e.g. 1, 1.5, 3) — default: 1' },
+          confirm_duplicate: { type: 'boolean', description: 'Set to true ONLY if the user explicitly confirmed they want to log a duplicate/second serving of the same food within a 5-minute window.' },
           date: { type: 'string', description: 'YYYY-MM-DD — defaults to today' },
         },
         required: ['name', 'calories', 'protein', 'carbs', 'fats'],
