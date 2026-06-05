@@ -13,8 +13,20 @@ const calculateTDEE = (user) => {
   const weight = user.weight || 70;
   const height = user.height || 170;
   const age = user.age || 25;
-  let bmr = 10 * weight + 6.25 * height - 5 * age + 5;
-  let tdee = Math.round(bmr * 1.55);
+  const isFemale = String(user.biologicalSex).toLowerCase() === 'female';
+  
+  // Mifflin-St Jeor BMR: +5 for Men, -161 for Women
+  let bmr = 10 * weight + 6.25 * height - 5 * age + (isFemale ? -161 : 5);
+  
+  // Activity Level Multiplier
+  let multiplier = 1.55; // Default: Moderately Active
+  const activity = String(user.activityLevel).toLowerCase();
+  if (activity === 'sedentary') multiplier = 1.2;
+  else if (activity === 'lightly active') multiplier = 1.375;
+  else if (activity === 'moderately active') multiplier = 1.55;
+  else if (activity === 'very active') multiplier = 1.725;
+
+  let tdee = Math.round(bmr * multiplier);
   if (user.healthGoals === 'Weight Loss') tdee = Math.round(tdee * 0.8);
   if (user.healthGoals === 'Muscle Gain') tdee = Math.round(tdee * 1.15);
   return tdee || 2000;
@@ -92,8 +104,18 @@ const generateMealPlan = async (req, res) => {
     const prompt = `You are a world-class nutritionist. Generate a personalized 7-day meal plan.
 
 USER PROFILE:
+- Preferred Language: ${user.preferredLanguage || 'English'}
 - Location: ${user.location || 'UAE'}
+- Biological Sex: ${user.biologicalSex || 'Male'}
+- Age: ${user.age || 'Unknown'} years
+- Weight: ${user.weight || 'Unknown'} kg
+- Height: ${user.height || 'Unknown'} cm
 - Health Goal: ${user.healthGoals || 'Maintenance'}
+- Activity Level: ${user.activityLevel || 'Moderately Active'}
+- Diet Preference: ${user.dietPreference?.join(', ') || 'None'}
+- Allergies & Intolerances: ${user.allergies?.join(', ') || 'None'}
+- Medical Conditions: ${user.medicalConditions?.join(', ') || 'None'}
+- Pregnancy/Lactation Status: ${user.pregnancyStatus || 'None'}
 - Dietary Restrictions: ${user.restrictions?.length > 0 ? user.restrictions.join(', ') : 'None'}
 - Items Available at Home (Pantry): ${user.pantry?.length > 0 ? user.pantry.join(', ') : 'None specified (prioritize standard items)'}
 - Daily Calorie Target: ${targetCalories} kcal

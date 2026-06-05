@@ -71,6 +71,13 @@ const authUser = async (req, res) => {
         pantry: user.pantry,
         targetCalories: user.targetCalories,
         streakCount: user.streakCount,
+        preferredLanguage: user.preferredLanguage,
+        biologicalSex: user.biologicalSex,
+        activityLevel: user.activityLevel,
+        dietPreference: user.dietPreference,
+        allergies: user.allergies,
+        medicalConditions: user.medicalConditions,
+        pregnancyStatus: user.pregnancyStatus,
         token: generateToken(user._id, rememberMe),
       });
     } else {
@@ -115,10 +122,12 @@ const updateUserProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Fields allowed to update
+     // Fields allowed to update
     const allowedFields = [
       'name', 'age', 'weight', 'height', 'healthGoals',
-      'restrictions', 'location', 'pantry', 'targetCalories'
+      'restrictions', 'location', 'pantry', 'targetCalories',
+      'preferredLanguage', 'biologicalSex', 'activityLevel',
+      'dietPreference', 'allergies', 'medicalConditions', 'pregnancyStatus'
     ];
 
     allowedFields.forEach(field => {
@@ -145,6 +154,13 @@ const updateUserProfile = async (req, res) => {
       targetCalories: updatedUser.targetCalories,
       streakCount: updatedUser.streakCount,
       role: updatedUser.role,
+      preferredLanguage: updatedUser.preferredLanguage,
+      biologicalSex: updatedUser.biologicalSex,
+      activityLevel: updatedUser.activityLevel,
+      dietPreference: updatedUser.dietPreference,
+      allergies: updatedUser.allergies,
+      medicalConditions: updatedUser.medicalConditions,
+      pregnancyStatus: updatedUser.pregnancyStatus,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

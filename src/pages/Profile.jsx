@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import client from "../api/client";
@@ -14,7 +14,9 @@ import {
   EyeOff,
   Sparkles,
   MapPin,
-  Heart
+  Heart,
+  Award,
+  Trophy
 } from "lucide-react";
 
 const Profile = () => {
@@ -22,6 +24,7 @@ const Profile = () => {
   const navigate = useNavigate();
 
   // Profile Form States
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [age, setAge] = useState("");
   const [weight, setWeight] = useState("");
@@ -30,6 +33,14 @@ const Profile = () => {
   const [location, setLocation] = useState("UAE");
   const [restrictions, setRestrictions] = useState([]);
   const [targetCalories, setTargetCalories] = useState("2000");
+
+  const [preferredLanguage, setPreferredLanguage] = useState("English");
+  const [biologicalSex, setBiologicalSex] = useState("Male");
+  const [activityLevel, setActivityLevel] = useState("Moderately Active");
+  const [dietPreference, setDietPreference] = useState([]);
+  const [allergies, setAllergies] = useState([]);
+  const [medicalConditions, setMedicalConditions] = useState([]);
+  const [pregnancyStatus, setPregnancyStatus] = useState("None");
 
   // Password Update States
   const [newPassword, setNewPassword] = useState("");
@@ -64,8 +75,10 @@ const Profile = () => {
   ];
 
   // Initialize Form
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (user) {
+      setName(user.name || "");
       setEmail(user.email || "");
       setAge(user.age || "");
       setWeight(user.weight || "");
@@ -75,8 +88,16 @@ const Profile = () => {
       setRestrictions(user.restrictions || []);
       setTargetCalories(user.targetCalories !== undefined && user.targetCalories !== null ? String(user.targetCalories) : "2000");
       setHasSecurityQuestion(!!user.hasSecurityQuestion);
+      setPreferredLanguage(user.preferredLanguage || "English");
+      setBiologicalSex(user.biologicalSex || "Male");
+      setActivityLevel(user.activityLevel || "Moderately Active");
+      setDietPreference(user.dietPreference || []);
+      setAllergies(user.allergies || []);
+      setMedicalConditions(user.medicalConditions || []);
+      setPregnancyStatus(user.pregnancyStatus || "None");
     }
   }, [user]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Live Password Checklist
   const passwordCriteria = {
@@ -119,12 +140,20 @@ const Profile = () => {
   const estimatedTdee =
     numWeight && numHeight && age
       ? (() => {
-          let bmr = 10 * numWeight + 6.25 * numHeight - 5 * parseInt(age) + 5;
-          let tdee = Math.round(bmr * 1.55);
-          if (healthGoals === "Weight Loss") tdee = Math.round(tdee * 0.8);
-          if (healthGoals === "Muscle Gain") tdee = Math.round(tdee * 1.15);
-          return tdee;
-        })()
+        const isFemale = biologicalSex === "Female";
+        let bmr = 10 * numWeight + 6.25 * numHeight - 5 * parseInt(age) + (isFemale ? -161 : 5);
+
+        let multiplier = 1.55;
+        if (activityLevel === "Sedentary") multiplier = 1.2;
+        else if (activityLevel === "Lightly Active") multiplier = 1.375;
+        else if (activityLevel === "Moderately Active") multiplier = 1.55;
+        else if (activityLevel === "Very Active") multiplier = 1.725;
+
+        let tdee = Math.round(bmr * multiplier);
+        if (healthGoals === "Weight Loss") tdee = Math.round(tdee * 0.8);
+        if (healthGoals === "Muscle Gain") tdee = Math.round(tdee * 1.15);
+        return tdee;
+      })()
       : null;
 
   let bmiCategory = "";
@@ -167,6 +196,30 @@ const Profile = () => {
     }
   };
 
+  const handleToggleDietPreference = (tag) => {
+    if (dietPreference.includes(tag)) {
+      setDietPreference(dietPreference.filter((d) => d !== tag));
+    } else {
+      setDietPreference([...dietPreference, tag]);
+    }
+  };
+
+  const handleToggleAllergy = (tag) => {
+    if (allergies.includes(tag)) {
+      setAllergies(allergies.filter((a) => a !== tag));
+    } else {
+      setAllergies([...allergies, tag]);
+    }
+  };
+
+  const handleToggleMedicalCondition = (tag) => {
+    if (medicalConditions.includes(tag)) {
+      setMedicalConditions(medicalConditions.filter((m) => m !== tag));
+    } else {
+      setMedicalConditions([...medicalConditions, tag]);
+    }
+  };
+
   // Submit profile edits
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -178,6 +231,7 @@ const Profile = () => {
 
     try {
       const payload = {
+        name,
         email,
         age: age === "" ? null : Number(age),
         weight: weight === "" ? null : Number(weight),
@@ -185,7 +239,14 @@ const Profile = () => {
         healthGoals,
         location,
         restrictions,
-        targetCalories: targetCalories === "" ? 2000 : Number(targetCalories)
+        targetCalories: targetCalories === "" ? 2000 : Number(targetCalories),
+        preferredLanguage,
+        biologicalSex,
+        activityLevel,
+        dietPreference,
+        allergies,
+        medicalConditions,
+        pregnancyStatus
       };
 
       // Add password to payload only if user successfully entered a validated password
@@ -193,9 +254,9 @@ const Profile = () => {
         payload.password = newPassword;
       }
 
-      const updatedData = await client.put("/api/users/profile", payload);
+      await client.put("/api/users/profile", payload);
       await refreshUser();
-      
+
       setSuccessMsg("✨ Profile saved successfully!");
       setNewPassword("");
       setConfirmPassword("");
@@ -257,7 +318,7 @@ const Profile = () => {
             <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
             <span>{backLabel}</span>
           </button>
-          
+
           <div className="font-headline text-xl font-bold text-primary tracking-tight">
             Mezan میزان
           </div>
@@ -274,7 +335,7 @@ const Profile = () => {
 
       {/* Main Profile canvas */}
       <main className="flex-1 max-w-[1200px] w-full mx-auto px-[24px] md:px-8 mt-8 space-y-8">
-        
+
         {/* Dynamic Alert Toasts */}
         {successMsg && (
           <div className="bg-emerald-50 text-emerald-800 border border-emerald-200/50 p-4 rounded-2xl flex items-center gap-3 shadow-md animate-slide-in">
@@ -329,10 +390,10 @@ const Profile = () => {
 
         {/* Profile form & biological metrics widget */}
         <form onSubmit={handleSaveProfile} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+
           {/* Editable Details Panel */}
           <div className="lg:col-span-2 space-y-8">
-            
+
             {/* Section 1: Personal Parameters */}
             <div className="bg-surface-container-lowest border border-outline-variant/30 p-6 rounded-3xl shadow-sm space-y-6">
               <div className="flex items-center gap-3 border-b border-outline-variant/20 pb-4">
@@ -346,6 +407,73 @@ const Profile = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Name / Nickname Input */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                    Nickname / Account Name
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="How should Mezan greet you?"
+                    className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-medium"
+                    required
+                  />
+                </div>
+
+                {/* Preferred Language Input */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                    Preferred Language
+                  </label>
+                  <select
+                    value={preferredLanguage}
+                    onChange={(e) => setPreferredLanguage(e.target.value)}
+                    className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-medium"
+                  >
+                    <option value="English">English</option>
+                    <option value="Urdu">Urdu (اردو)</option>
+                    <option value="Arabic">Arabic (العربية)</option>
+                  </select>
+                </div>
+
+                {/* Biological Sex Input */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                    Biological Sex
+                  </label>
+                  <select
+                    value={biologicalSex}
+                    onChange={(e) => {
+                      setBiologicalSex(e.target.value);
+                      if (e.target.value !== "Female") setPregnancyStatus("None");
+                    }}
+                    className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-medium"
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+
+                {/* Pregnancy Status Input (Only shown if Female) */}
+                {biologicalSex === "Female" && (
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                      Pregnancy or Lactation Status
+                    </label>
+                    <select
+                      value={pregnancyStatus}
+                      onChange={(e) => setPregnancyStatus(e.target.value)}
+                      className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-medium"
+                    >
+                      <option value="None">Not Pregnant / Not Lactating</option>
+                      <option value="Pregnant">Pregnant</option>
+                      <option value="Lactating">Lactating</option>
+                    </select>
+                  </div>
+                )}
+
                 {/* Age Input */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
@@ -440,218 +568,314 @@ const Profile = () => {
                   )}
                 </div>
               </div>
-            </div>
-
-            {/* Section 2: Health & Dietary Requirements */}
-            <div className="bg-surface-container-lowest border border-outline-variant/30 p-6 rounded-3xl shadow-sm space-y-6">
-              <div className="flex items-center gap-3 border-b border-outline-variant/20 pb-4">
-                <div className="bg-primary/10 p-2 rounded-xl text-primary">
-                  <Heart className="w-5 h-5" />
+              {/* Section 2: Health, Lifestyle & Dietary Requirements */}
+              <div className="bg-surface-container-lowest border border-outline-variant/30 p-6 rounded-3xl shadow-sm space-y-6">
+                <div className="flex items-center gap-3 border-b border-outline-variant/20 pb-4">
+                  <div className="bg-primary/10 p-2 rounded-xl text-primary">
+                    <Heart className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-text-rich-black">Health, Lifestyle & Targets</h2>
+                    <p className="text-xs text-on-surface-variant">Customize your goals, activity levels, diet types, and health guardrails.</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-base font-bold text-text-rich-black">Health & Dietary Requirements</h2>
-                  <p className="text-xs text-on-surface-variant">Customize your target goals and food restriction preferences.</p>
-                </div>
-              </div>
 
-              {/* Health Goal */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
-                  Dietary Goal
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {["Weight Loss", "Muscle Gain", "Maintenance"].map((goal) => {
-                    const active = healthGoals === goal;
-                    return (
-                      <button
-                        key={goal}
-                        type="button"
-                        onClick={() => setHealthGoals(goal)}
-                        className={`py-3 px-4 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${
-                          active
+                {/* Health Goal */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                    Dietary Goal
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {["Weight Loss", "Muscle Gain", "Maintenance", "Disease Management"].map((goal) => {
+                      const active = healthGoals === goal;
+                      return (
+                        <button
+                          key={goal}
+                          type="button"
+                          onClick={() => setHealthGoals(goal)}
+                          className={`py-3 px-4 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${active
                             ? "bg-primary text-white border-primary shadow-sm"
                             : "bg-surface-off-white text-on-surface-variant border-outline-variant/35 hover:bg-surface-container-low"
-                        }`}
-                      >
-                        {goal}
-                      </button>
-                    );
-                  })}
+                            }`}
+                        >
+                          {goal}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              {/* Dietary Restrictions Toggles */}
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
-                  Dietary Restrictions
-                </label>
-                <p className="text-[11px] text-on-surface-variant font-medium">
-                  We'll customize your AI Coach meal ideas & daily generated Meal Plans based on these tags.
-                </p>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {POPULAR_RESTRICTIONS.map((tag) => {
-                    const selected = restrictions.includes(tag);
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => handleToggleRestriction(tag)}
-                        className={`px-4 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer ${
-                          selected
+                {/* Activity Level */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                    Activity Level
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {["Sedentary", "Lightly Active", "Moderately Active", "Very Active"].map((level) => {
+                      const active = activityLevel === level;
+                      return (
+                        <button
+                          key={level}
+                          type="button"
+                          onClick={() => setActivityLevel(level)}
+                          className={`py-3 px-2 rounded-xl border text-xs font-bold transition-all text-center cursor-pointer ${active
+                            ? "bg-primary text-white border-primary shadow-sm"
+                            : "bg-surface-off-white text-on-surface-variant border-outline-variant/35 hover:bg-surface-container-low"
+                            }`}
+                        >
+                          {level}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Diet Type / Preference */}
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                    Diet Type / Preference
+                  </label>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {["Halal", "Vegetarian", "Vegan", "Keto", "None"].map((pref) => {
+                      const selected = dietPreference.includes(pref);
+                      return (
+                        <button
+                          key={pref}
+                          type="button"
+                          onClick={() => handleToggleDietPreference(pref)}
+                          className={`px-4 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer ${selected
                             ? "bg-primary-container text-primary border-primary/30"
                             : "bg-surface-off-white text-on-surface-variant border-outline-variant/35 hover:bg-surface-container-low"
-                        }`}
-                      >
-                        {tag}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Section 3: Account Credentials & Security */}
-            <div className="bg-surface-container-lowest border border-outline-variant/30 p-6 rounded-3xl shadow-sm space-y-6">
-              <div className="flex items-center gap-3 border-b border-outline-variant/20 pb-4">
-                <div className="bg-primary/10 p-2 rounded-xl text-primary">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-text-rich-black">Account Credentials & Security</h2>
-                  <p className="text-xs text-on-surface-variant">Update your registered email or change passwords securely.</p>
-                </div>
-              </div>
-
-              {/* Email Input */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
-                  Registered Email Address
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter email address"
-                  className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-medium"
-                  required
-                />
-                {!isEmailValid && (
-                  <p className="text-[11px] text-rose-500 font-semibold">Please enter a valid email format.</p>
-                )}
-              </div>
-
-              {/* Change Password Sub-fields */}
-              <div className="border-t border-outline-variant/20 pt-6 space-y-4">
-                <h3 className="text-sm font-bold text-text-rich-black">Change Security Password</h3>
-                <p className="text-xs text-on-surface-variant">Leave these fields blank if you do not wish to update your password.</p>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* New Password */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
-                      New Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showNewPassword ? "text" : "password"}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="Enter 12+ char password"
-                        className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-primary font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 top-3 text-on-surface-variant hover:text-primary cursor-pointer"
-                      >
-                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Confirm Password */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
-                      Confirm New Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showConfirmPassword ? "text" : "password"}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter password"
-                        className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-primary font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-3 text-on-surface-variant hover:text-primary cursor-pointer"
-                      >
-                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
+                            }`}
+                        >
+                          {pref}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Password Criteria Live Checklist */}
-                {isPasswordAttempted && (
-                  <div className="bg-surface-container-lowest border border-outline-variant/20 p-4 rounded-2xl space-y-2 mt-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-text-rich-black block">
-                      Password Requirements:
-                    </span>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {[
-                        { key: "length", text: "At least 12 characters" },
-                        { key: "lowercase", text: "One lowercase letter" },
-                        { key: "uppercase", text: "One uppercase letter" },
-                        { key: "number", text: "One numeric digit" },
-                        { key: "special", text: "One special symbol" }
-                      ].map((item) => {
-                        const passed = passwordCriteria[item.key];
-                        return (
-                          <div key={item.key} className="flex items-center gap-2 text-xs font-medium">
-                            {passed ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            ) : (
-                              <XCircle className="w-4 h-4 text-rose-500" />
-                            )}
-                            <span className={passed ? "text-text-rich-black" : "text-on-surface-variant"}>
-                              {item.text}
-                            </span>
-                          </div>
-                        );
-                      })}
+                {/* Allergies & Intolerances */}
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                    Allergies & Intolerances
+                  </label>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {["Peanuts", "Dairy", "Gluten", "Soy", "Shellfish", "Tree Nuts", "Egg"].map((alg) => {
+                      const selected = allergies.includes(alg);
+                      return (
+                        <button
+                          key={alg}
+                          type="button"
+                          onClick={() => handleToggleAllergy(alg)}
+                          className={`px-4 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer ${selected
+                            ? "bg-error-container text-error border-error/30"
+                            : "bg-surface-off-white text-on-surface-variant border-outline-variant/35 hover:bg-surface-container-low"
+                            }`}
+                        >
+                          {alg}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Medical Conditions */}
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                    Medical Conditions
+                  </label>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {["Type 2 Diabetes", "Hypertension", "Hyperthyroidism", "None"].map((cond) => {
+                      const selected = medicalConditions.includes(cond);
+                      return (
+                        <button
+                          key={cond}
+                          type="button"
+                          onClick={() => handleToggleMedicalCondition(cond)}
+                          className={`px-4 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer ${selected
+                            ? "bg-primary-container text-primary border-primary/30"
+                            : "bg-surface-off-white text-on-surface-variant border-outline-variant/35 hover:bg-surface-container-low"
+                            }`}
+                        >
+                          {cond}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Dietary Restrictions Toggles */}
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                    Other Dietary Exclusions
+                  </label>
+                  <p className="text-[11px] text-on-surface-variant font-medium">
+                    We'll customize your AI Coach meal ideas & daily generated Meal Plans based on these tags.
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {POPULAR_RESTRICTIONS.map((tag) => {
+                      const selected = restrictions.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => handleToggleRestriction(tag)}
+                          className={`px-4 py-2 rounded-full text-xs font-bold border transition-all cursor-pointer ${selected
+                            ? "bg-primary-container text-primary border-primary/30"
+                            : "bg-surface-off-white text-on-surface-variant border-outline-variant/35 hover:bg-surface-container-low"
+                            }`}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Account Credentials & Security */}
+              <div className="bg-surface-container-lowest border border-outline-variant/30 p-6 rounded-3xl shadow-sm space-y-6">
+                <div className="flex items-center gap-3 border-b border-outline-variant/20 pb-4">
+                  <div className="bg-primary/10 p-2 rounded-xl text-primary">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-text-rich-black">Account Credentials & Security</h2>
+                    <p className="text-xs text-on-surface-variant">Update your registered email or change passwords securely.</p>
+                  </div>
+                </div>
+
+                {/* Email Input */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                    Registered Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter email address"
+                    className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary font-medium"
+                    required
+                  />
+                  {!isEmailValid && (
+                    <p className="text-[11px] text-rose-500 font-semibold">Please enter a valid email format.</p>
+                  )}
+                </div>
+
+                {/* Change Password Sub-fields */}
+                <div className="border-t border-outline-variant/20 pt-6 space-y-4">
+                  <h3 className="text-sm font-bold text-text-rich-black">Change Security Password</h3>
+                  <p className="text-xs text-on-surface-variant">Leave these fields blank if you do not wish to update your password.</p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* New Password */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                        New Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showNewPassword ? "text" : "password"}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Enter 12+ char password"
+                          className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-primary font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-3 text-on-surface-variant hover:text-primary cursor-pointer"
+                        >
+                          {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="border-t border-outline-variant/20 pt-3 flex items-center gap-2 text-xs font-medium">
-                      {isPasswordMatch ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-rose-500" />
-                      )}
-                      <span className={isPasswordMatch ? "text-text-rich-black" : "text-on-surface-variant"}>
-                        Passwords match exactly
+                    {/* Confirm Password */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-text-rich-black uppercase tracking-wider block">
+                        Confirm New Password
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Re-enter password"
+                          className="w-full bg-surface-off-white border border-outline-variant/35 rounded-xl pl-4 pr-10 py-3 text-sm focus:outline-none focus:border-primary font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-3 text-on-surface-variant hover:text-primary cursor-pointer"
+                        >
+                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Password Criteria Live Checklist */}
+                  {isPasswordAttempted && (
+                    <div className="bg-surface-container-lowest border border-outline-variant/20 p-4 rounded-2xl space-y-2 mt-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-text-rich-black block">
+                        Password Requirements:
                       </span>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {[
+                          { key: "length", text: "At least 12 characters" },
+                          { key: "lowercase", text: "One lowercase letter" },
+                          { key: "uppercase", text: "One uppercase letter" },
+                          { key: "number", text: "One numeric digit" },
+                          { key: "special", text: "One special symbol" }
+                        ].map((item) => {
+                          const passed = passwordCriteria[item.key];
+                          return (
+                            <div key={item.key} className="flex items-center gap-2 text-xs font-medium">
+                              {passed ? (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                              ) : (
+                                <XCircle className="w-4 h-4 text-rose-500" />
+                              )}
+                              <span className={passed ? "text-text-rich-black" : "text-on-surface-variant"}>
+                                {item.text}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="border-t border-outline-variant/20 pt-3 flex items-center gap-2 text-xs font-medium">
+                        {isPasswordMatch ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-rose-500" />
+                        )}
+                        <span className={isPasswordMatch ? "text-text-rich-black" : "text-on-surface-variant"}>
+                          Passwords match exactly
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+
               </div>
 
-            </div>
-
-            {/* Sticky/Floating Save Action Bar */}
-            <div className="flex justify-end pt-2">
-              <button
-                type="submit"
-                disabled={isSaveBlocked}
-                className={`px-8 py-3.5 rounded-2xl text-sm font-bold shadow-md cursor-pointer transition-all duration-200 ${
-                  isSaveBlocked
+              {/* Sticky/Floating Save Action Bar */}
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={isSaveBlocked}
+                  className={`px-8 py-3.5 rounded-2xl text-sm font-bold shadow-md cursor-pointer transition-all duration-200 ${isSaveBlocked
                     ? "bg-outline-variant/40 text-on-surface-variant cursor-not-allowed shadow-none"
                     : "bg-primary text-white hover:bg-primary-container hover:shadow-lg active:scale-95"
-                }`}
-              >
-                {loading ? "Saving Profile..." : "Save Changes"}
-              </button>
+                    }`}
+                >
+                  {loading ? "Saving Profile..." : "Save Changes"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -759,6 +983,84 @@ const Profile = () => {
                 </div>
               )}
             </div>
+
+            {/* Achievements & Badges Widget */}
+            <div className="bg-surface-container-lowest border border-outline-variant/30 p-6 rounded-3xl shadow-sm space-y-6">
+              <div className="flex items-center gap-3 border-b border-outline-variant/20 pb-4">
+                <div className="bg-primary/10 p-2 rounded-xl text-primary">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-text-rich-black">Achievements & Badges</h2>
+                  <p className="text-xs text-on-surface-variant">Earn rewards by keeping up your logging habits.</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {[
+                  {
+                    name: "First Log",
+                    description: "Logged your first meal!",
+                    unlocked: (user?.streakCount > 0),
+                    icon: Sparkles,
+                    color: "text-amber-500 bg-amber-500/10 border-amber-500/20",
+                  },
+                  {
+                    name: "3-Day Streak",
+                    description: "Logged for 3 consecutive days!",
+                    unlocked: (user?.streakCount >= 3),
+                    icon: Flame,
+                    color: "text-orange-500 bg-orange-500/10 border-orange-500/20",
+                  },
+                  {
+                    name: "7-Day Streak",
+                    description: "Logged for 7 consecutive days!",
+                    unlocked: (user?.streakCount >= 7),
+                    icon: Trophy,
+                    color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
+                  },
+                ].map((badge, idx) => {
+                  const IconComponent = badge.icon;
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300 ${
+                        badge.unlocked
+                          ? "bg-surface-off-white border-outline-variant/25 opacity-100"
+                          : "bg-surface-off-white/40 border-outline-variant/10 opacity-60"
+                      }`}
+                    >
+                      <div
+                        className={`p-3 rounded-xl border ${
+                          badge.unlocked
+                            ? badge.color
+                            : "text-on-surface-variant bg-outline-variant/10 border-outline-variant/20"
+                        }`}
+                      >
+                        <IconComponent className={`w-5 h-5 ${badge.unlocked && badge.name === 'Flame' ? 'animate-pulse' : ''}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-text-rich-black truncate">{badge.name}</h4>
+                          {badge.unlocked ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-500/10 text-emerald-600 rounded-full border border-emerald-500/20">
+                              Unlocked
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-0.5 bg-outline-variant/10 text-on-surface-variant rounded-full border border-outline-variant/20">
+                              Locked
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-on-surface-variant font-medium mt-0.5">
+                          {badge.description}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </form>
 
@@ -836,11 +1138,10 @@ const Profile = () => {
             <button
               type="submit"
               disabled={secLoading || !securityQuestion.trim() || !securityAnswer.trim()}
-              className={`px-8 py-3.5 rounded-2xl text-sm font-bold shadow-md cursor-pointer transition-all duration-200 ${
-                secLoading || !securityQuestion.trim() || !securityAnswer.trim()
-                  ? "bg-outline-variant/40 text-on-surface-variant cursor-not-allowed shadow-none"
-                  : "bg-primary text-white hover:bg-primary-container hover:shadow-lg active:scale-95"
-              }`}
+              className={`px-8 py-3.5 rounded-2xl text-sm font-bold shadow-md cursor-pointer transition-all duration-200 ${secLoading || !securityQuestion.trim() || !securityAnswer.trim()
+                ? "bg-outline-variant/40 text-on-surface-variant cursor-not-allowed shadow-none"
+                : "bg-primary text-white hover:bg-primary-container hover:shadow-lg active:scale-95"
+                }`}
             >
               {secLoading ? "Saving..." : hasSecurityQuestion ? "Update Security Question" : "Set Security Question"}
             </button>

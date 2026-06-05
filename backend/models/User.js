@@ -22,11 +22,22 @@ const userSchema = new mongoose.Schema({
   height: { type: Number, default: null },
   healthGoals: {
     type: String,
-    enum: ['Weight Loss', 'Muscle Gain', 'Maintenance'],
+    enum: ['Weight Loss', 'Muscle Gain', 'Maintenance', 'Disease Management'],
     default: 'Maintenance',
   },
   restrictions: { type: [String], default: [] },
   location: { type: String, default: 'UAE' },
+  preferredLanguage: { type: String, default: 'English' },
+  biologicalSex: { type: String, enum: ['Male', 'Female'], default: 'Male' },
+  activityLevel: {
+    type: String,
+    enum: ['Sedentary', 'Lightly Active', 'Moderately Active', 'Very Active'],
+    default: 'Moderately Active',
+  },
+  dietPreference: { type: [String], default: [] },
+  allergies: { type: [String], default: [] },
+  medicalConditions: { type: [String], default: [] },
+  pregnancyStatus: { type: String, enum: ['None', 'Pregnant', 'Lactating'], default: 'None' },
   streakCount: { type: Number, default: 0 },
   role: {
     type: String,

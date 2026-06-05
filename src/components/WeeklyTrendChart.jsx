@@ -19,19 +19,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const METRICS = [
   { key: 'calories', label: 'Calories', color: '#3a6937', unit: 'kcal' },
-  { key: 'protein',  label: 'Protein',  color: '#92C68A', unit: 'g' },
-  { key: 'carbs',    label: 'Carbs',    color: '#FCD34D', unit: 'g' },
-  { key: 'fats',     label: 'Fats',     color: '#FB7185', unit: 'g' },
+  { key: 'protein', label: 'Protein', color: '#92C68A', unit: 'g' },
+  { key: 'carbs', label: 'Carbs', color: '#FCD34D', unit: 'g' },
+  { key: 'fats', label: 'Fats', color: '#FB7185', unit: 'g' },
 ];
 
-// Generate the last N dates as ISO strings (midnight-local → ISO)
+// Generate the last N dates as UTC midnight Date objects corresponding to client's local calendar days
 const getLastNDates = (n) => {
   const dates = [];
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date();
-    d.setDate(d.getDate() - i);
-    d.setHours(0, 0, 0, 0);
-    dates.push(d);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const date = d.getDate() - i;
+
+    // Create Date at UTC Midnight timezone-independently
+    const utcMidnight = new Date(Date.UTC(year, month, date));
+    dates.push(utcMidnight);
   }
   return dates;
 };
@@ -75,10 +79,10 @@ const WeeklyTrendChart = () => {
       const chartData = dates.map((d) => {
         const dateString = d.toISOString();
         const foundLog = logs.find((log) => log.date === dateString);
-        
+
         return {
-          day: SHORT_DAY[d.getDay()],
-          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          day: SHORT_DAY[d.getUTCDay()],
+          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
           calories: Math.round(foundLog?.totals?.calories || 0),
           protein: Math.round(foundLog?.totals?.protein || 0),
           carbs: Math.round(foundLog?.totals?.carbs || 0),
@@ -107,8 +111,8 @@ const WeeklyTrendChart = () => {
   const prevAvg =
     data.length >= 4
       ? Math.round(
-          data.slice(-4, -1).reduce((s, d) => s + d[activeMetric], 0) / 3
-        )
+        data.slice(-4, -1).reduce((s, d) => s + d[activeMetric], 0) / 3
+      )
       : weekAvg;
   const trendPct = prevAvg > 0 ? Math.round(((todayVal - prevAvg) / prevAvg) * 100) : 0;
 
@@ -139,11 +143,10 @@ const WeeklyTrendChart = () => {
             </div>
             {trendPct !== 0 && (
               <div
-                className={`px-2 py-1 rounded-full flex items-center gap-0.5 ${
-                  trendPct > 0
+                className={`px-2 py-1 rounded-full flex items-center gap-0.5 ${trendPct > 0
                     ? 'bg-success-green/15 text-success-green'
                     : 'bg-error-container/30 text-error'
-                }`}
+                  }`}
               >
                 <span className="material-symbols-outlined text-[14px]">
                   {trendPct > 0 ? 'trending_up' : 'trending_down'}
@@ -162,11 +165,10 @@ const WeeklyTrendChart = () => {
             <button
               key={m.key}
               onClick={() => setActiveMetric(m.key)}
-              className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap ${
-                activeMetric === m.key
+              className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[11px] font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap ${activeMetric === m.key
                   ? 'text-white shadow-sm'
                   : 'bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container'
-              }`}
+                }`}
               style={
                 activeMetric === m.key
                   ? { backgroundColor: m.color }

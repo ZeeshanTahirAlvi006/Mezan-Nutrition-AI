@@ -184,4 +184,49 @@ const getWeeklyLogs = async (req, res) => {
   }
 };
 
-export { createDailyLog, getDailyLog, getWeeklyLogs };
+// @desc    Remove food item from daily log by index
+// @route   DELETE /api/logs/daily/:date/item/:index
+const removeFoodItemFromLog = async (req, res) => {
+  try {
+    const timezone = resolveTimezone(req, req.user);
+    const parsedDate = getNormalizedLocalDate(req.params.date, timezone);
+    const dateString = parsedDate.toISOString();
+    const userId = req.user._id.toString();
+    const itemIndex = parseInt(req.params.index);
+
+    const log = await DailyLog.findOne({ userId, date: dateString });
+    if (!log) {
+      return res.status(404).json({ message: 'Daily log not found.' });
+    }
+
+    if (itemIndex < 0 || itemIndex >= log.foodItems.length) {
+      return res.status(400).json({ message: 'Invalid food item index.' });
+    }
+
+    // Subtract the macros of the removed item
+    const removedItem = log.foodItems[itemIndex];
+    const servings = removedItem.servings || 1;
+    log.totals.calories = Math.max(0, log.totals.calories - (removedItem.calories || 0) * servings);
+    log.totals.protein = Math.max(0, log.totals.protein - (removedItem.protein || 0) * servings);
+    log.totals.carbs = Math.max(0, log.totals.carbs - (removedItem.carbs || 0) * servings);
+    log.totals.fats = Math.max(0, log.totals.fats - (removedItem.fats || 0) * servings);
+
+    // Remove from array
+    log.foodItems.splice(itemIndex, 1);
+
+    const savedLog = await log.save();
+    
+    // Non-blocking background streak update
+    recalculateStreak(userId).catch(() => {});
+
+    res.json({
+      _id: savedLog._id,
+      ...savedLog.toObject(),
+    });
+  } catch (error) {
+    console.error('Remove Food Item Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export { createDailyLog, getDailyLog, getWeeklyLogs, removeFoodItemFromLog };

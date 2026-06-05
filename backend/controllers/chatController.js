@@ -250,15 +250,17 @@ const createOrGetSession = async (req, res) => {
     }
 
     // Check if there is an existing empty active session to reuse and prevent duplicates
-    const existingEmptySession = await ChatSession.findOne({
-      userId,
-      isActive: true,
-      messages: { $size: 0 }
-    });
-    if (existingEmptySession) {
-      const sessionObj = existingEmptySession.toObject();
-      localChatCache.set(existingEmptySession._id.toString(), sessionObj);
-      return res.json({ _id: existingEmptySession._id, ...sessionObj });
+    if (!req.body.new) {
+      const existingEmptySession = await ChatSession.findOne({
+        userId,
+        isActive: true,
+        messages: { $size: 0 }
+      });
+      if (existingEmptySession) {
+        const sessionObj = existingEmptySession.toObject();
+        localChatCache.set(existingEmptySession._id.toString(), sessionObj);
+        return res.json({ _id: existingEmptySession._id, ...sessionObj });
+      }
     }
 
     const newSession = await ChatSession.create({
@@ -488,9 +490,20 @@ const executeTool = async (req, res) => {
       }
 
       const top3 = foods.slice(0, 3);
-      const resultString = top3.length > 0
-        ? JSON.stringify(top3.map(f => ({ name: f.name, calories: f.calories, protein: f.protein, carbs: f.carbs, fats: f.fats })))
-        : `No food items found matching '${query}'.`;
+      const resultString = top3.length === 0
+        ? JSON.stringify({ found: false, query, matches: [] })
+        : JSON.stringify({
+            found: true,
+            query,
+            matches: top3.map(f => ({
+              name: f.name,
+              calories: f.calories,
+              protein: f.protein,
+              carbs: f.carbs,
+              fats: f.fats,
+              exact_match: f.name.toLowerCase() === safeQ,
+            }))
+          });
 
       return res.json({ result: resultString });
     }

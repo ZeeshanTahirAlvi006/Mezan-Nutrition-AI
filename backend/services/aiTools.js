@@ -11,9 +11,10 @@ export const buildTools = () => [
     function: {
       name: 'log_meal',
       description:
-        'Log a meal or food item for the user. Call IMMEDIATELY when the user ' +
-        'mentions eating anything. Estimate macros if not provided — never ask ' +
-        'the user to supply them.',
+        'Log a verified food item after a successful search_food_database call confirmed a match. ' +
+        'NEVER call this tool without a prior successful search. ' +
+        'NEVER estimate or hallucinate macro values — all macro values must come from search_food_database results. ' +
+        'If no verified match exists in the database, do not call this tool.',
       parameters: {
         type: 'object',
         properties: {

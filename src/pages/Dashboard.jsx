@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import client from "../api/client";
 import FoodSearch from "../components/FoodSearch";
@@ -40,20 +40,23 @@ const Dashboard = () => {
     setTimeout(() => setShowToast(false), 4000);
   };
 
-  useEffect(() => {
-    fetchTodayLog();
-    refreshUser();
-  }, []);
-
   const fetchTodayLog = async () => {
     try {
       const today = new Date().toISOString();
       const { data } = await client.get(`/api/logs/daily/${today}`);
       setLog(data);
-    } catch (err) {
+    } catch {
       console.log("No log for today yet");
     }
   };
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    fetchTodayLog();
+    refreshUser();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleAddFood = async (food) => {
     try {
@@ -77,6 +80,23 @@ const Dashboard = () => {
       setTimeout(() => setShowToast(false), 4000);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleRemoveFood = async (index) => {
+    try {
+      const today = new Date().toISOString();
+      await client.delete(`/api/logs/daily/${today}/item/${index}`);
+      fetchTodayLog();
+      refreshUser();
+      setToastMessage("Food item removed successfully!");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
+    } catch (err) {
+      console.error("Failed to remove food item", err);
+      setToastMessage("Failed to remove food item. Please try again.");
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 4000);
     }
   };
 
@@ -178,9 +198,6 @@ const Dashboard = () => {
 
   // ── Calculated macro goals (mirrors backend Mifflin-St Jeor) ──
   const weight = Number(user?.weight) || 0;
-  const height = Number(user?.height) || 0;
-  const age = Number(user?.age) || 0;
-  const gender = (user?.gender || "female").toLowerCase();
 
   const calorieGoal = user?.targetCalories || 2000;
 
@@ -393,13 +410,23 @@ const Dashboard = () => {
                             </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-headline text-sm font-bold text-primary">
-                            {item.calories !== undefined
-                              ? Math.round(item.calories * item.servings)
-                              : 0}
-                          </p>
-                          <p className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">kcal</p>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="font-headline text-sm font-bold text-primary">
+                              {item.calories !== undefined
+                                ? Math.round(item.calories * item.servings)
+                                : 0}
+                            </p>
+                            <p className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">kcal</p>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveFood(idx)}
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-error hover:bg-error/10 transition-colors cursor-pointer border-none bg-transparent"
+                            title="Remove food item"
+                            aria-label="Remove food item"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                          </button>
                         </div>
                       </motion.div>
                     ))}
