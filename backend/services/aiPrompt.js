@@ -19,7 +19,7 @@ WEATHER-BASED RULES:
 `;
 };
 
-export const buildSystemPrompt = (user, weatherContext, goals) => {
+export const buildSystemPrompt = (user, weatherContext, goals, timezone = 'UTC') => {
   const { calorieGoal, proteinGoal, carbsGoal, fatsGoal, waterGoal } = goals;
 
   const pantryList =
@@ -27,9 +27,11 @@ export const buildSystemPrompt = (user, weatherContext, goals) => {
 
   const currentDateString = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    timeZone: timezone,
   });
   const currentTimeString = new Date().toLocaleTimeString('en-US', {
     hour: '2-digit', minute: '2-digit',
+    timeZone: timezone,
   });
 
   return `

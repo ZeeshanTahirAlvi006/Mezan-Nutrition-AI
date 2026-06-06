@@ -266,7 +266,7 @@ const getCompletionWithFallback = async (params) => {
 //  MAIN EXPORT: generateChatResponse
 // ─────────────────────────────────────────────
 
-const generateChatResponse = async (user, messages) => {
+const generateChatResponse = async (user, messages, timezone = 'UTC') => {
   try {
     // ── 1. Fetch weather context (Stale-While-Revalidate to make it non-blocking!) ─────────────────
     let weatherContext = '';
@@ -324,7 +324,7 @@ const generateChatResponse = async (user, messages) => {
     };
 
     // ── 3. Assemble messages ─────────────────────
-    const systemPrompt = buildSystemPrompt(user, weatherContext, goals);
+    const systemPrompt = buildSystemPrompt(user, weatherContext, goals, timezone);
     const fullMessages = [
       { role: 'system', content: systemPrompt },
       ...messages,

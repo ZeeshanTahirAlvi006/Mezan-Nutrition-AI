@@ -380,7 +380,8 @@ const sendMessage = async (req, res) => {
 
     let aiResponse;
     try {
-      aiResponse = await generateChatResponse(req.user, apiMessages);
+      const timezone = resolveTimezone(req, req.user);
+      aiResponse = await generateChatResponse(req.user, apiMessages, timezone);
     } catch (aiErr) {
       console.warn("[Chat Controller] AI Service failed, using local fallback:", aiErr.message);
       if (role === 'tool') {
